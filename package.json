@@ -1,0 +1,14 @@
+{
+	"name": "Clay-Wgpu-Test",
+	"version": "1.0.0",
+	"description": "",
+	"main": "index.js",
+	"scripts": {
+		"build": "zig build",
+		"app": "run.bat"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"packageManager": "pnpm@10.13.1"
+}

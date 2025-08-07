@@ -2421,6 +2421,11 @@ Clay_String Clay__IntToString(int32_t integer) {
         return CLAY__INIT(Clay_String) { .length = 1, .chars = "0" };
     }
     Clay_Context* context = Clay_GetCurrentContext();
+    // 检查缓冲区是否有足够的空间 (11个字符用于-2147483648, 1个用于空终止符)
+    if (context->dynamicStringData.length + 12 > context->dynamicStringData.capacity) {
+        // 缓冲区不足，返回错误或空字符串
+        return CLAY__STRING_DEFAULT;
+    }
     char *chars = (char *)(context->dynamicStringData.internalArray + context->dynamicStringData.length);
     int32_t length = 0;
     int32_t sign = integer;

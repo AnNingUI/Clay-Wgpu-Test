@@ -1,28 +1,58 @@
 # .clangd configuration file
+
+# 所有文件通用的默认配置
 ---
 CompileFlags:
-  # The compiler to use
   Compiler: gcc
-  # Add these flags to the compilation command
-  # 这里请自行适配
   Add:
+    - -D_GNU_SOURCE=1
+    - -D__GNUC__=4
+    - -D_WIN64=1
+    - -Wno-pragma-pack
+    - -Wall
+    - -Wno-missing-prototypes
     - -D__WIN32__=1
     - -D_WIN32=1
+    - -Ic:/llvm/include
+    - -Id:/Software/Dev/msys64/ucrt64/include
     - -I../include
     - -I../../include
-    - -Ic:/llvm/include
-    # - -Id:/CUtils/include
-    - -Id:/Software/Dev/msys64/ucrt64/include
-    - -Wno-pragma-pack
+    - --target=x86_64-pc-windows-msvc
 
+
+---
+Diagnostics:
+  Suppress: 
+    - invalid_token_after_toplevel_declarator
+
+# 针对 C 语言源文件 (.c)
 ---
 If:
   PathMatch: .*\.c$
 CompileFlags:
   Add: [-std=c99]
 
+# 针对 C++ 源文件 (.cpp)
+---
+If:
+  PathMatch: .*\.cpp$
+CompileFlags:
+  Add: [-std=c++20]
+
+# 针对 C 语言头文件 (.h)，且不被 C++ 源文件所包含
+# 这个规则比较复杂，但能有效地区分 C 和 C++ 头文件
+# 假设 C++ 头文件通常以.hpp结尾
 ---
 If:
   PathMatch: .*\.h$
+  # 排除所有被 C++ 源文件所包含的头文件，以防止C++头文件被当作C头文件解析
+  PathExclude: .*\.cpp$ 
 CompileFlags:
   Add: [-std=c99, -x, c-header]
+
+# 针对 C++ 头文件 (.hpp)
+---
+If:
+  PathMatch: .*\.hpp$
+CompileFlags:
+  Add: [-std=c++20, -x, c++-header]
