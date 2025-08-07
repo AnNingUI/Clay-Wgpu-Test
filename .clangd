@@ -1,0 +1,28 @@
+# .clangd configuration file
+---
+CompileFlags:
+  # The compiler to use
+  Compiler: gcc
+  # Add these flags to the compilation command
+  # 这里请自行适配
+  Add:
+    - -D__WIN32__=1
+    - -D_WIN32=1
+    - -I../include
+    - -I../../include
+    - -Ic:/llvm/include
+    # - -Id:/CUtils/include
+    - -Id:/Software/Dev/msys64/ucrt64/include
+    - -Wno-pragma-pack
+
+---
+If:
+  PathMatch: .*\.c$
+CompileFlags:
+  Add: [-std=c99]
+
+---
+If:
+  PathMatch: .*\.h$
+CompileFlags:
+  Add: [-std=c99, -x, c-header]
