@@ -11,7 +11,6 @@ pub fn build(b: *std.Build) void {
 
     if (target.query.cpu_arch) |arch| {
         name.appendSlice(arch.genericName()) catch |err| {
-            // 在构建脚本中，内存不足通常是致命错误，可以直接 panic
             std.debug.panic("Failed to append arch name: {}", .{err});
         };
     } else {
@@ -38,40 +37,80 @@ pub fn build(b: *std.Build) void {
 
     exe.addIncludePath(b.path("include"));
 
-    // 链接 ucrt64 lib // 我这里是 msys2的 ucrt64，如果你的libwgpu_native.dll.a 在其他地方，请修改这里
-    const UCRT64_LIB = std.process.getEnvVarOwned(b.allocator, "UCRT64_LIB") catch |err| switch (err) {
-        error.EnvironmentVariableNotFound => "d:/Software/Dev/msys64/ucrt64/lib",
-        else => std.debug.panic("Failed to get UCRT64_LIB: {}", .{err}),
-    };
-    exe.addLibraryPath(.{ .cwd_relative = UCRT64_LIB });
+    // 根据目标操作系统调整编译配置
+    const os_tag = target.result.os.tag;
 
-    // 引入 ucrt64 Include // 我这里是 msys2的 ucrt64，如果你的webgpu/webgpu.h 在其他地方，请修改这里
-    const UCRT64_INCLUDE = std.process.getEnvVarOwned(b.allocator, "UCRT64_INCLUDE") catch |err| switch (err) {
-        error.EnvironmentVariableNotFound => "d:/Software/Dev/msys64/ucrt64/include",
-        else => std.debug.panic("Failed to get UCRT64_INCLUDE: {}", .{err}),
-    };
-    exe.addIncludePath(.{ .cwd_relative = UCRT64_INCLUDE });
+    // 设置平台特定的库路径和链接库
+    switch (os_tag) {
+        .windows => {
+            // Windows 特定配置
+            const UCRT64_LIB = std.process.getEnvVarOwned(b.allocator, "UCRT64_LIB") catch |err| switch (err) {
+                error.EnvironmentVariableNotFound => "d:/Software/Dev/msys64/ucrt64/lib",
+                else => std.debug.panic("Failed to get UCRT64_LIB: {}", .{err}),
+            };
+            exe.addLibraryPath(.{ .cwd_relative = UCRT64_LIB });
 
-    exe.linkSystemLibrary("c++");
-    exe.linkSystemLibrary("glfw3");
-    exe.linkSystemLibrary("wgpu_native"); // 添加 WebGPU 库
+            const UCRT64_INCLUDE = std.process.getEnvVarOwned(b.allocator, "UCRT64_INCLUDE") catch |err| switch (err) {
+                error.EnvironmentVariableNotFound => "d:/Software/Dev/msys64/ucrt64/include",
+                else => std.debug.panic("Failed to get UCRT64_INCLUDE: {}", .{err}),
+            };
+            exe.addIncludePath(.{ .cwd_relative = UCRT64_INCLUDE });
 
-    // 添加 FreeType 库支持
-    exe.linkSystemLibrary("freetype");
+            exe.linkSystemLibrary("c++");
+            exe.linkSystemLibrary("glfw3");
+            exe.linkSystemLibrary("wgpu_native");
 
-    // 添加 Windows 系统库
-    exe.linkSystemLibrary("gdi32");
-    exe.linkSystemLibrary("user32");
-    exe.linkSystemLibrary("kernel32");
-    exe.linkSystemLibrary("ws2_32"); // Windows Sockets API
-    exe.linkSystemLibrary("ole32"); // COM Library
-    exe.linkSystemLibrary("oleaut32"); // OLE Automation
-    exe.linkSystemLibrary("opengl32"); // OpenGL
-    exe.linkSystemLibrary("d3dcompiler"); // DirectX Shader Compiler
-    exe.linkSystemLibrary("shell32"); // Shell API (解决GetUserProfileDirectoryW)
-    exe.linkSystemLibrary("propsys"); // Property System (解决VariantToPropVariant, PropVariantToBSTR)
-    exe.linkSystemLibrary("runtimeobject"); // Runtime Object (解决RoOriginateErrorW)
-    exe.linkSystemLibrary("userenv"); // User Environment (解决GetUserProfileDirectoryW)
+            // Windows 系统库
+            exe.linkSystemLibrary("gdi32");
+            exe.linkSystemLibrary("user32");
+            exe.linkSystemLibrary("kernel32");
+            exe.linkSystemLibrary("ws2_32");
+            exe.linkSystemLibrary("ole32");
+            exe.linkSystemLibrary("oleaut32");
+            exe.linkSystemLibrary("opengl32");
+            exe.linkSystemLibrary("d3dcompiler");
+            exe.linkSystemLibrary("shell32");
+            exe.linkSystemLibrary("propsys");
+            exe.linkSystemLibrary("runtimeobject");
+            exe.linkSystemLibrary("userenv");
+        },
+        .linux => {
+            // Linux 特定配置
+            exe.linkSystemLibrary("stdc++");
+            exe.linkSystemLibrary("glfw");
+            exe.linkSystemLibrary("webgpu");
+
+            // Linux 系统库
+            exe.linkSystemLibrary("m");
+            exe.linkSystemLibrary("dl");
+            exe.linkSystemLibrary("pthread");
+            exe.linkSystemLibrary("X11");
+            exe.linkSystemLibrary("Xrandr");
+            exe.linkSystemLibrary("Xinerama");
+            exe.linkSystemLibrary("Xcursor");
+            exe.linkSystemLibrary("Xi");
+        },
+        .macos => {
+            // macOS 特定配置
+            exe.linkSystemLibrary("c++");
+            exe.linkSystemLibrary("glfw");
+            exe.linkSystemLibrary("webgpu");
+
+            // macOS 框架
+            exe.linkFramework("Cocoa");
+            exe.linkFramework("CoreVideo");
+            exe.linkFramework("IOKit");
+            exe.linkFramework("Metal");
+            exe.linkFramework("MetalKit");
+            exe.linkFramework("QuartzCore");
+        },
+        else => {
+            // 其他系统使用默认配置
+            exe.linkSystemLibrary("c++");
+            exe.linkSystemLibrary("glfw3");
+            exe.linkSystemLibrary("wgpu_native");
+        },
+    }
 
     exe.linkLibC();
     b.installArtifact(exe);
