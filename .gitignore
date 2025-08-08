@@ -4,3 +4,4 @@
 # Macos
 .DS_Store
 zig-out
+log.txt

@@ -68,11 +68,29 @@ void HandleClayErrors(Clay_ErrorData errorData) {
   printf("Clay Error: %s\n", errorData.errorText.chars);
 }
 
-// 文本测量函数
+// 文本测量函数 - 使用文本渲染器进行准确测量
 Clay_Dimensions MeasureText(Clay_StringSlice text,
                             Clay_TextElementConfig *config, void *userData) {
-  return (Clay_Dimensions){.width = text.length * config->fontSize * 0.6f,
-                           .height = config->fontSize};
+    
+    AppContext *app = (AppContext *)userData;
+    if (!app || !app->clayRenderer || !app->clayRenderer->textRenderer) {
+        // 回退到简单估计
+        return (Clay_Dimensions){.width = text.length * config->fontSize * 0.6f,
+                                 .height = config->fontSize};
+    }
+    
+    // 使用文本渲染器测量文本
+    float width = text_renderer_measure_string_width(
+        app->clayRenderer->textRenderer, 
+        text.chars, 
+        config->fontId, 
+        text.length);
+    
+    float height = text_renderer_get_line_height(
+        app->clayRenderer->textRenderer, 
+        config->fontId);
+    
+    return (Clay_Dimensions){.width = width, .height = height};
 }
 
 // 创建WebGPU表面 - 跨平台实现
@@ -271,110 +289,117 @@ void CreateAppLayout(AppContext *app) {
         .backgroundColor = BACKGROUND_COLOR}) {
     // 标题栏
     HeaderComponent(CLAY_STRING("Clay 响应式 UI 示例"));
-    // CLAY_TEXT(CLAY_STRING("Test UI"),
-    //           CLAY_TEXT_CONFIG(
-    //               {.fontId = 0, .fontSize = 20, .textColor =
-    //               PRIMARY_COLOR}));
+    CLAY_TEXT(CLAY_STRING("Test UI"),
+              CLAY_TEXT_CONFIG(
+                  {.fontId = 0, .fontSize = 20, .textColor =
+                  PRIMARY_COLOR}));
 
     // 内容区域
-    // CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
-    //                  .padding = {20, 20, 20, 20},
-    //                  .childGap = 20,
-    //                  .layoutDirection = CLAY_TOP_TO_BOTTOM}}) {
-    // // 响应式卡片网格
-    // ResponsiveCardGrid();
+    CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
+                     .padding = {20, 20, 20, 20},
+                     .childGap = 20,
+                     .layoutDirection = CLAY_TOP_TO_BOTTOM}}) {
+    // 响应式卡片网格
+    ResponsiveCardGrid();
 
-    // // // 按钮区域
-    // CLAY({.layout = {
-    //           .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(60)},
-    //           .layoutDirection = CLAY_LEFT_TO_RIGHT,
-    //           .childGap = 15,
-    //           .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
+    // // 按钮区域
+    CLAY({.layout = {
+              .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(60)},
+              .layoutDirection = CLAY_LEFT_TO_RIGHT,
+              .childGap = 15,
+              .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
 
-    //   ButtonComponent(&(ButtonData){.text = CLAY_STRING("主要按钮"),
-    //                                 .backgroundColor = PRIMARY_COLOR,
-    //                                 .buttonId = primaryButtonId,
-    //                                 .on_click = onPrimaryButtonClick});
-    //   ButtonComponent(&(ButtonData){.text = CLAY_STRING("次要按钮"),
-    //                                 .backgroundColor = SECONDARY_COLOR,
-    //                                 .buttonId = secondaryButtonId,
-    //                                 .on_click = onSecondaryButtonClick});
-    //   ButtonComponent(&(ButtonData){.text = CLAY_STRING("强调按钮"),
-    //                                 .backgroundColor = ACCENT_COLOR,
-    //                                 .buttonId = accentButtonId,
-    //                                 .on_click = onAccentButtonClick});
-    // }
+      ButtonComponent(&(ButtonData){.text = CLAY_STRING("主要按钮"),
+                                    .backgroundColor = PRIMARY_COLOR,
+                                    .buttonId = primaryButtonId,
+                                    .on_click = onPrimaryButtonClick});
+      ButtonComponent(&(ButtonData){.text = CLAY_STRING("次要按钮"),
+                                    .backgroundColor = SECONDARY_COLOR,
+                                    .buttonId = secondaryButtonId,
+                                    .on_click = onSecondaryButtonClick});
+      ButtonComponent(&(ButtonData){.text = CLAY_STRING("强调按钮"),
+                                    .backgroundColor = ACCENT_COLOR,
+                                    .buttonId = accentButtonId,
+                                    .on_click = onAccentButtonClick});
+    }
 
     // 信息区域
-    // CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
-    //                  .padding = {20, 20, 20, 20},
-    //                  .childGap = 15,
-    //                  .layoutDirection = CLAY_TOP_TO_BOTTOM},
-    //       .backgroundColor = CARD_COLOR,
-    //       .cornerRadius = CLAY_CORNER_RADIUS(10)}) {
-    //   CLAY({.layout = {
-    //             .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(30)}}}) {
-    //     CLAY_TEXT(
-    //         CLAY_STRING("响应式特性"),
-    //         CLAY_TEXT_CONFIG(
-    //             {.fontId = 0, .fontSize = 20, .textColor = PRIMARY_COLOR}));
-    //   }
+    CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
+                     .padding = {20, 20, 20, 20},
+                     .childGap = 15,
+                     .layoutDirection = CLAY_TOP_TO_BOTTOM},
+          .backgroundColor = CARD_COLOR,
+          .cornerRadius = CLAY_CORNER_RADIUS(10)}) {
+      CLAY({.layout = {
+                .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(30)}}}) {
+        CLAY_TEXT(
+            CLAY_STRING("中文文本测试"),
+            CLAY_TEXT_CONFIG(
+                {.fontId = 0, .fontSize = 20, .textColor = PRIMARY_COLOR}));
+      }
+      
+      // 中文文本测试
+      CLAY_TEXT(
+          CLAY_STRING("你好世界！这是中文文本渲染测试。"),
+          CLAY_TEXT_CONFIG(
+              {.fontId = 0, .fontSize = 16, .textColor = TEXT_COLOR}));
 
-    //   // 根据窗口大小动态调整布局
-    //   Clay_Context *context = Clay_GetCurrentContext();
-    //   int currentWidth = Clay_GetLayoutDirectionWidth(context);
+      // 根据窗口大小动态调整布局
+      Clay_Context *context = Clay_GetCurrentContext();
+      int currentWidth = Clay_GetLayoutDirectionWidth(context);
 
-    //   // 在小屏幕上使用垂直布局，在大屏幕上使用水平布局
-    //   Clay_LayoutDirection featureLayoutDirection =
-    //       (currentWidth < 768) ? CLAY_TOP_TO_BOTTOM : CLAY_LEFT_TO_RIGHT;
+      // 在小屏幕上使用垂直布局，在大屏幕上使用水平布局
+      Clay_LayoutDirection featureLayoutDirection =
+          (currentWidth < 768) ? CLAY_TOP_TO_BOTTOM : CLAY_LEFT_TO_RIGHT;
 
-    //   CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
-    //                    .layoutDirection = featureLayoutDirection,
-    //                    .childGap = 15}}) {
-    //     CLAY({.layout = {
-    //               .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(20)},
-    //               .layoutDirection = CLAY_LEFT_TO_RIGHT,
-    //               .childGap = 10}}) {
-    //       CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(10),
-    //                                   CLAY_SIZING_FIXED(10)}},
-    //             .backgroundColor = ACCENT_COLOR,
-    //             .cornerRadius = CLAY_CORNER_RADIUS(5)}) {}
-    //       CLAY_TEXT(
-    //           CLAY_STRING("基于窗口大小的自适应布局"),
-    //           CLAY_TEXT_CONFIG(
-    //               {.fontId = 0, .fontSize = 14, .textColor = TEXT_COLOR}));
-    //     }
+      CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
+                       .layoutDirection = featureLayoutDirection,
+                       .childGap = 15}}) {
+        CLAY({.layout = {
+                  .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(20)},
+                  .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                  .childGap = 10}}) {
+          CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(10),
+                                      CLAY_SIZING_FIXED(10)}},
+                .backgroundColor = ACCENT_COLOR,
+                .cornerRadius = CLAY_CORNER_RADIUS(5)}) {}
+          CLAY_TEXT(
+              CLAY_STRING("基于窗口大小的自适应布局"),
+              CLAY_TEXT_CONFIG(
+                  {.fontId = 0, .fontSize = 14, .textColor = TEXT_COLOR}));
+        }
 
-    //     CLAY({.layout = {
-    //               .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(20)},
-    //               .layoutDirection = CLAY_LEFT_TO_RIGHT,
-    //               .childGap = 10}}) {
-    //       CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(10),
-    //                                   CLAY_SIZING_FIXED(10)}},
-    //             .backgroundColor = ACCENT_COLOR,
-    //             .cornerRadius = CLAY_CORNER_RADIUS(5)}) {}
-    //       CLAY_TEXT(
-    //           CLAY_STRING("百分比尺寸支持"),
-    //           CLAY_TEXT_CONFIG(
-    //               {.fontId = 0, .fontSize = 14, .textColor = TEXT_COLOR}));
-    //     }
+        CLAY({.layout = {
+                  .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(20)},
+                  .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                  .childGap = 10}}) {
+          CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(10),
+                                      CLAY_SIZING_FIXED(10)}},
+                .backgroundColor = ACCENT_COLOR,
+                .cornerRadius = CLAY_CORNER_RADIUS(5)}) {}
+          CLAY_TEXT(
+              CLAY_STRING("百分比尺寸支持"),
+              CLAY_TEXT_CONFIG(
+                  {.fontId = 0, .fontSize = 14, .textColor = TEXT_COLOR}));
+        }
 
-    //     CLAY({.layout = {
-    //               .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(20)},
-    //               .layoutDirection = CLAY_LEFT_TO_RIGHT,
-    //               .childGap = 10}}) {
-    //       CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(10),
-    //                                   CLAY_SIZING_FIXED(10)}},
-    //             .backgroundColor = ACCENT_COLOR,
-    //             .cornerRadius = CLAY_CORNER_RADIUS(5)}) {}
-    //       CLAY_TEXT(
-    //           CLAY_STRING("动态组件重排"),
-    //           CLAY_TEXT_CONFIG(
-    //               {.fontId = 0, .fontSize = 14, .textColor = TEXT_COLOR}));
-    //     }
-    //   }
-    // }
-    // }
+        CLAY({.layout = {
+                  .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(20)},
+                  .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                  .childGap = 10}}) {
+          CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(10),
+                                      CLAY_SIZING_FIXED(10)}},
+                .backgroundColor = ACCENT_COLOR,
+                .cornerRadius = CLAY_CORNER_RADIUS(5)}) {}
+          CLAY_TEXT(
+              CLAY_STRING("动态组件重排"),
+              CLAY_TEXT_CONFIG(
+                  {.fontId = 0, .fontSize = 14, .textColor = TEXT_COLOR}));
+        }
+      }
+    }
+
+    }
   }
 }
 
@@ -569,7 +594,7 @@ int main() {
       totalMemorySize, malloc(totalMemorySize));
   Clay_Initialize(arena, (Clay_Dimensions){app.windowWidth, app.windowHeight},
                   (Clay_ErrorHandler){HandleClayErrors});
-  Clay_SetMeasureTextFunction(MeasureText, NULL);
+  Clay_SetMeasureTextFunction(MeasureText, &app);
 
   // 初始化Clay WebGPU渲染器
   app.clayRenderer = Clay_WebGPU_Initialize(app.device, app.queue, NULL,
@@ -582,146 +607,101 @@ int main() {
     return -1;
   }
 
-  // 加载字体纹理 - 尝试多种可能的字体路径
-  const char *fontPaths[] = {"./arial.ttf", // 首先尝试当前目录下的字体文件
-                             "./fonts/arial.ttf",
+  // 使用新的文本渲染系统加载字体 - 优先加载支持中文的字体
+  printf("=== 开始加载字体 ===\n");
+  
+  // 检查系统字体目录
 #ifdef _WIN32
-                             "C:/Windows/Fonts/msyh.ttc",
-                             "C:/Windows/Fonts/arial.ttf",
-                             "C:/Windows/Fonts/calibri.ttf",
-                             "C:/Windows/Fonts/segoeui.ttf",
+  printf("检测到Windows系统，检查系统字体目录...\n");
+  const char *fontPaths[] = {
+      "./fonts/msyh.ttc",           // 项目目录下的微软雅黑
+      "./fonts/simhei.ttf",         // 项目目录下的黑体
+      "./fonts/simsun.ttc",         // 项目目录下的宋体
+      "./fonts/arial.ttf",          // 项目目录下的Arial
+      "C:/Windows/Fonts/msyh.ttc",     // 系统微软雅黑
+      "C:/Windows/Fonts/msyhbd.ttc",   // 系统微软雅黑粗体
+      "C:/Windows/Fonts/simhei.ttf",   // 系统黑体
+      "C:/Windows/Fonts/simsun.ttc",   // 系统宋体
+      "C:/Windows/Fonts/simkai.ttf",   // 系统楷体
+      "C:/Windows/Fonts/arial.ttf",    // 系统Arial
+      "C:/Windows/Fonts/arialuni.ttf", // Arial Unicode（支持中文）
+      "C:/Windows/Fonts/calibri.ttf",
+      "C:/Windows/Fonts/segoeui.ttf",
 #elif defined(__APPLE__)
-                             "/System/Library/Fonts/Arial.ttf",
-                             "/System/Library/Fonts/Helvetica.ttc",
-                             "/System/Library/Fonts/SFNS.ttf",
+  printf("检测到macOS系统，检查系统字体目录...\n");
+  const char *fontPaths[] = {
+      "./fonts/PingFang.ttc",       // 项目目录下的苹方
+      "./fonts/STHeiti Medium.ttc", // 项目目录下的华文黑体
+      "/System/Library/Fonts/Arial.ttf",
+      "/System/Library/Fonts/Helvetica.ttc",
+      "/System/Library/Fonts/SFNS.ttf",
+      "/System/Library/Fonts/STHeiti Medium.ttc",  // 华文黑体
+      "/System/Library/Fonts/STHeiti Light.ttc",   // 华文细黑
+      "/System/Library/Fonts/PingFang.ttc",        // 苹方
 #elif defined(__linux__)
-                             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                             "/usr/share/fonts/TTF/arial.ttf",
-                             "/usr/share/fonts/truetype/liberation/"
-                             "LiberationSans-Regular.ttf",
+  printf("检测到Linux系统，检查系统字体目录...\n");
+  const char *fontPaths[] = {
+      "./fonts/NotoSansCJK-Regular.ttc", // 项目目录下的Noto CJK
+      "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+      "/usr/share/fonts/TTF/arial.ttf",
+      "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+      "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf", // Android fallback
+      "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",    // Noto CJK
+      "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
 #endif
-                             NULL};
+      NULL};
 
   bool fontLoaded = false;
   for (int i = 0; fontPaths[i] != NULL; i++) {
-    printf("尝试加载字体: %s\n", fontPaths[i]);
-    if (LoadFontTexture(app.clayRenderer, fontPaths[i], 16)) {
-      printf("成功加载字体: %s\n", fontPaths[i]);
-      fontLoaded = true;
-      break;
+    // 检查文件是否存在
+    FILE *testFile = fopen(fontPaths[i], "rb");
+    if (testFile) {
+      fclose(testFile);
+      printf("字体文件存在: %s\n", fontPaths[i]);
+      
+      if (Clay_WebGPU_LoadFont(app.clayRenderer, fontPaths[i], 16)) {
+        printf("✓ 成功加载字体: %s\n", fontPaths[i]);
+        fontLoaded = true;
+        break;
+      } else {
+        printf("✗ 无法加载字体: %s (文件存在但加载失败)\n", fontPaths[i]);
+      }
     } else {
-      printf("无法加载字体: %s\n", fontPaths[i]);
+      printf("字体文件不存在: %s\n", fontPaths[i]);
     }
   }
 
   if (!fontLoaded) {
-    printf("警告: 无法加载任何字体文件，文本渲染可能无法正常工作\n");
-    // 创建一个默认的字体纹理，即使没有实际字体数据
-    // 这样可以避免渲染时出现绑定组错误
-    FontTexture *defaultFontTexture =
-        (FontTexture *)calloc(1, sizeof(FontTexture));
-    if (defaultFontTexture) {
-      defaultFontTexture->width = 256;
-      defaultFontTexture->height = 256;
-      defaultFontTexture->pixels = (unsigned char *)calloc(1, 256 * 256);
-      if (defaultFontTexture->pixels) {
-        // 创建一个简单的默认纹理（全白）
-        memset(defaultFontTexture->pixels, 255, 256 * 256);
+    printf("警告: 无法加载任何字体文件，将尝试加载系统默认字体\n");
 
-        // 创建WGPU纹理
-        WGPUTextureDescriptor textureDesc = {
-            .label = {.data = "Default Font Texture", .length = WGPU_STRLEN},
-            .usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst,
-            .dimension = WGPUTextureDimension_2D,
-            .size = {.width = 256, .height = 256, .depthOrArrayLayers = 1},
-            .format = WGPUTextureFormat_R8Unorm,
-            .mipLevelCount = 1,
-            .sampleCount = 1,
-        };
-        defaultFontTexture->texture =
-            wgpuDeviceCreateTexture(app.clayRenderer->device, &textureDesc);
+    // 尝试加载更多系统字体作为fallback
+    const char *fallbackPaths[] = {
+#ifdef _WIN32
+        "C:/Windows/Fonts/tahoma.ttf",
+        "C:/Windows/Fonts/verdana.ttf",
+        "C:/Windows/Fonts/consola.ttf",
+#elif defined(__APPLE__)
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/System/Library/Fonts/Times.ttc",
+#elif defined(__linux__)
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+#endif
+        NULL
+    };
 
-        if (defaultFontTexture->texture) {
-          // 上传纹理数据
-          WGPUTexelCopyTextureInfo destination = {
-              .texture = defaultFontTexture->texture,
-              .mipLevel = 0,
-              .origin = {0, 0, 0},
-              .aspect = WGPUTextureAspect_All,
-          };
-
-          WGPUTexelCopyBufferLayout dataLayout = {
-              .offset = 0,
-              .bytesPerRow = 256,
-              .rowsPerImage = 256,
-          };
-
-          WGPUExtent3D writeSize = {
-              .width = 256,
-              .height = 256,
-              .depthOrArrayLayers = 1,
-          };
-
-          wgpuQueueWriteTexture(app.clayRenderer->queue, &destination,
-                                defaultFontTexture->pixels, 256 * 256,
-                                &dataLayout, &writeSize);
-
-          // 创建纹理视图
-          WGPUTextureViewDescriptor textureViewDesc = {
-              .label = {.data = "Default Font Texture View",
-                        .length = WGPU_STRLEN},
-              .format = WGPUTextureFormat_R8Unorm,
-              .dimension = WGPUTextureViewDimension_2D,
-              .baseMipLevel = 0,
-              .mipLevelCount = 1,
-              .baseArrayLayer = 0,
-              .arrayLayerCount = 1,
-              .aspect = WGPUTextureAspect_All,
-          };
-          defaultFontTexture->textureView = wgpuTextureCreateView(
-              defaultFontTexture->texture, &textureViewDesc);
-
-          // 创建采样器
-          WGPUSamplerDescriptor samplerDesc = {
-              .label = {.data = "Default Font Sampler", .length = WGPU_STRLEN},
-              .addressModeU = WGPUAddressMode_ClampToEdge,
-              .addressModeV = WGPUAddressMode_ClampToEdge,
-              .addressModeW = WGPUAddressMode_ClampToEdge,
-              .magFilter = WGPUFilterMode_Linear,
-              .minFilter = WGPUFilterMode_Linear,
-              .mipmapFilter = WGPUMipmapFilterMode_Linear,
-              .lodMinClamp = 0,
-              .lodMaxClamp = 1,
-              .compare = WGPUCompareFunction_Undefined,
-              .maxAnisotropy = 1,
-          };
-          defaultFontTexture->sampler =
-              wgpuDeviceCreateSampler(app.clayRenderer->device, &samplerDesc);
-
-          if (defaultFontTexture->textureView && defaultFontTexture->sampler) {
-            app.clayRenderer->fontTexture = defaultFontTexture;
-            printf("创建了默认字体纹理\n");
-          } else {
-            // 清理失败的资源
-            if (defaultFontTexture->textureView)
-              wgpuTextureViewRelease(defaultFontTexture->textureView);
-            if (defaultFontTexture->texture)
-              wgpuTextureRelease(defaultFontTexture->texture);
-            if (defaultFontTexture->pixels)
-              free(defaultFontTexture->pixels);
-            free(defaultFontTexture);
-            printf("无法创建默认字体纹理\n");
-          }
-        } else {
-          if (defaultFontTexture->pixels)
-            free(defaultFontTexture->pixels);
-          free(defaultFontTexture);
-          printf("无法创建默认字体纹理对象\n");
-        }
-      } else {
-        free(defaultFontTexture);
-        printf("无法分配默认字体像素内存\n");
+    for (int i = 0; fallbackPaths[i] != NULL; i++) {
+      printf("尝试fallback字体: %s\n", fallbackPaths[i]);
+      if (Clay_WebGPU_LoadFont(app.clayRenderer, fallbackPaths[i], 16)) {
+        printf("成功加载fallback字体: %s\n", fallbackPaths[i]);
+        fontLoaded = true;
+        break;
       }
+    }
+
+    if (!fontLoaded) {
+      printf("错误: 无法加载任何字体文件，文本渲染将无法正常工作\n");
     }
   }
 
