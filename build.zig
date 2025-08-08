@@ -78,7 +78,7 @@ pub fn build(b: *std.Build) void {
             // Linux 特定配置
             exe.linkSystemLibrary("stdc++");
             exe.linkSystemLibrary("glfw");
-            exe.linkSystemLibrary("webgpu");
+            exe.linkSystemLibrary("wgpu_native");
 
             // Linux 系统库
             exe.linkSystemLibrary("m");
@@ -94,7 +94,7 @@ pub fn build(b: *std.Build) void {
             // macOS 特定配置
             exe.linkSystemLibrary("c++");
             exe.linkSystemLibrary("glfw");
-            exe.linkSystemLibrary("webgpu");
+            exe.linkSystemLibrary("wgpu_native");
 
             // macOS 框架
             exe.linkFramework("Cocoa");
