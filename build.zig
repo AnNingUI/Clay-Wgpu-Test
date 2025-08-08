@@ -43,7 +43,7 @@ pub fn build(b: *std.Build) void {
     // 设置平台特定的库路径和链接库
     switch (os_tag) {
         .windows => {
-            // Windows 特定配置
+            // Windows 特定配置 我的第三方 include 都放在了 ucrt64 下
             const UCRT64_LIB = std.process.getEnvVarOwned(b.allocator, "UCRT64_LIB") catch |err| switch (err) {
                 error.EnvironmentVariableNotFound => "d:/Software/Dev/msys64/ucrt64/lib",
                 else => std.debug.panic("Failed to get UCRT64_LIB: {}", .{err}),
