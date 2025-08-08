@@ -1,3 +1,4 @@
+#include "DEV.h"
 #include "components/components.h"
 #include "renderer/renderer.h"
 #include <GLFW/glfw3.h>
@@ -65,7 +66,7 @@ const Clay_Color COLOR_WHITE = {255, 255, 255, 255};
 
 // Clay错误处理函数
 void HandleClayErrors(Clay_ErrorData errorData) {
-  printf("Clay Error: %s\n", errorData.errorText.chars);
+  Log("Clay Error: %s\n", errorData.errorText.chars);
 }
 
 // 文本测量函数 - 使用文本渲染器进行准确测量
@@ -135,7 +136,7 @@ void OnAdapterRequestEnded(WGPURequestAdapterStatus status, WGPUAdapter adapter,
   if (status == WGPURequestAdapterStatus_Success) {
     *(WGPUAdapter *)userdata1 = adapter;
   } else {
-    printf("Failed to request adapter: %.*s\n", (int)message.length,
+    Log("Failed to request adapter: %.*s\n", (int)message.length,
            message.data);
   }
 }
@@ -147,7 +148,7 @@ void OnDeviceRequestEnded(WGPURequestDeviceStatus status, WGPUDevice device,
   if (status == WGPURequestDeviceStatus_Success) {
     *(WGPUDevice *)userdata1 = device;
   } else {
-    printf("Failed to request device: %.*s\n", (int)message.length,
+    Log("Failed to request device: %.*s\n", (int)message.length,
            message.data);
   }
 }
@@ -158,18 +159,18 @@ bool InitializeWebGPU(AppContext *app) {
   WGPUInstanceDescriptor instanceDesc = {0};
   app->instance = wgpuCreateInstance(&instanceDesc);
   if (!app->instance) {
-    printf("Failed to create WebGPU instance\n");
+    Log("Failed to create WebGPU instance\n");
     return false;
   }
-  printf("WebGPU instance created successfully\n");
+  Log("WebGPU instance created successfully\n");
 
   // 创建表面
   app->surface = CreateSurface(app->instance, app->window);
   if (!app->surface) {
-    printf("Failed to create WebGPU surface\n");
+    Log("Failed to create WebGPU surface\n");
     return false;
   }
-  printf("WebGPU surface created successfully\n");
+  Log("WebGPU surface created successfully\n");
 
   // 请求适配器 - 添加更详细的错误处理
   WGPURequestAdapterOptions adapterOptions = {
@@ -190,19 +191,19 @@ bool InitializeWebGPU(AppContext *app) {
   }
 
   if (!adapter) {
-    printf("Failed to get WebGPU adapter\n");
+    Log("Failed to get WebGPU adapter\n");
     return false;
   }
-  printf("WebGPU adapter obtained successfully\n");
+  Log("WebGPU adapter obtained successfully\n");
 
   // 检查适配器特性
   WGPUAdapterInfo adapterInfo;
   wgpuAdapterGetInfo(adapter, &adapterInfo);
-  printf("Adapter: %.*s\n", (int)adapterInfo.description.length,
+  Log("Adapter: %.*s\n", (int)adapterInfo.description.length,
          adapterInfo.description.data);
-  printf("Vendor: %.*s\n", (int)adapterInfo.vendor.length,
+  Log("Vendor: %.*s\n", (int)adapterInfo.vendor.length,
          adapterInfo.vendor.data);
-  printf("Device: %.*s\n", (int)adapterInfo.device.length,
+  Log("Device: %.*s\n", (int)adapterInfo.device.length,
          adapterInfo.device.data);
 
   // 请求设备
@@ -220,11 +221,11 @@ bool InitializeWebGPU(AppContext *app) {
   }
 
   if (!app->device) {
-    printf("Failed to get WebGPU device\n");
+    Log("Failed to get WebGPU device\n");
     wgpuAdapterRelease(adapter);
     return false;
   }
-  printf("WebGPU device obtained successfully\n");
+  Log("WebGPU device obtained successfully\n");
 
   app->queue = wgpuDeviceGetQueue(app->device);
 
@@ -244,7 +245,7 @@ bool InitializeWebGPU(AppContext *app) {
   }
 
   if (!formatSupported) {
-    printf("BGRA8Unorm format not supported, using first available format\n");
+    Log("BGRA8Unorm format not supported, using first available format\n");
     selectedFormat = capabilities.formats[0];
   }
 
@@ -269,11 +270,11 @@ bool InitializeWebGPU(AppContext *app) {
 }
 
 // Event Callback
-static void onPrimaryButtonClick() { printf("点击了主要按钮\n"); }
+static void onPrimaryButtonClick() { Log("点击了主要按钮\n"); }
 
-static void onSecondaryButtonClick() { printf("点击了次要按钮\n"); }
+static void onSecondaryButtonClick() { Log("点击了次要按钮\n"); }
 
-static void onAccentButtonClick() { printf("点击了强调按钮\n"); }
+static void onAccentButtonClick() { Log("点击了强调按钮\n"); }
 
 // 创建应用程序UI布局
 void CreateAppLayout(AppContext *app) {
@@ -450,7 +451,7 @@ void RunApp(AppContext *app) {
             WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal &&
         surfaceTexture.status !=
             WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal) {
-      printf("Failed to get surface texture: %d\n", surfaceTexture.status);
+      Log("Failed to get surface texture: %d\n", surfaceTexture.status);
 
       // 强制Present清理状态
       wgpuSurfacePresent(app->surface);
@@ -561,7 +562,7 @@ int main() {
 
   // 初始化GLFW
   if (!glfwInit()) {
-    printf("Failed to initialize GLFW\n");
+    Log("Failed to initialize GLFW\n");
     return -1;
   }
 
@@ -572,7 +573,7 @@ int main() {
                                 "Clay Native App with WebGPU", NULL, NULL);
 
   if (!app.window) {
-    printf("Failed to create window\n");
+    Log("Failed to create window\n");
     glfwTerminate();
     return -1;
   }
@@ -583,7 +584,7 @@ int main() {
 
   // 初始化WebGPU
   if (!InitializeWebGPU(&app)) {
-    printf("Failed to initialize WebGPU\n");
+    Log("Failed to initialize WebGPU\n");
     CleanupApp(&app);
     return -1;
   }
@@ -601,18 +602,18 @@ int main() {
                                             app.windowWidth, app.windowHeight);
 
   if (!app.clayRenderer) {
-    printf("Failed to initialize Clay WebGPU renderer\n");
+    Log("Failed to initialize Clay WebGPU renderer\n");
     CleanupApp(&app);
     RestoreConsole();
     return -1;
   }
 
   // 使用新的文本渲染系统加载字体 - 优先加载支持中文的字体
-  printf("=== 开始加载字体 ===\n");
+  Log("=== 开始加载字体 ===\n");
   
   // 检查系统字体目录
 #ifdef _WIN32
-  printf("检测到Windows系统，检查系统字体目录...\n");
+  Log("检测到Windows系统，检查系统字体目录...\n");
   const char *fontPaths[] = {
       "./fonts/msyh.ttc",           // 项目目录下的微软雅黑
       "./fonts/simhei.ttf",         // 项目目录下的黑体
@@ -628,7 +629,7 @@ int main() {
       "C:/Windows/Fonts/calibri.ttf",
       "C:/Windows/Fonts/segoeui.ttf",
 #elif defined(__APPLE__)
-  printf("检测到macOS系统，检查系统字体目录...\n");
+  Log("检测到macOS系统，检查系统字体目录...\n");
   const char *fontPaths[] = {
       "./fonts/PingFang.ttc",       // 项目目录下的苹方
       "./fonts/STHeiti Medium.ttc", // 项目目录下的华文黑体
@@ -639,7 +640,7 @@ int main() {
       "/System/Library/Fonts/STHeiti Light.ttc",   // 华文细黑
       "/System/Library/Fonts/PingFang.ttc",        // 苹方
 #elif defined(__linux__)
-  printf("检测到Linux系统，检查系统字体目录...\n");
+  Log("检测到Linux系统，检查系统字体目录...\n");
   const char *fontPaths[] = {
       "./fonts/NotoSansCJK-Regular.ttc", // 项目目录下的Noto CJK
       "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -657,22 +658,22 @@ int main() {
     FILE *testFile = fopen(fontPaths[i], "rb");
     if (testFile) {
       fclose(testFile);
-      printf("字体文件存在: %s\n", fontPaths[i]);
+      Log("字体文件存在: %s\n", fontPaths[i]);
       
       if (Clay_WebGPU_LoadFont(app.clayRenderer, fontPaths[i], 16)) {
-        printf("✓ 成功加载字体: %s\n", fontPaths[i]);
+        Log("✓ 成功加载字体: %s\n", fontPaths[i]);
         fontLoaded = true;
         break;
       } else {
-        printf("✗ 无法加载字体: %s (文件存在但加载失败)\n", fontPaths[i]);
+        Log("✗ 无法加载字体: %s (文件存在但加载失败)\n", fontPaths[i]);
       }
     } else {
-      printf("字体文件不存在: %s\n", fontPaths[i]);
+      Log("字体文件不存在: %s\n", fontPaths[i]);
     }
   }
 
   if (!fontLoaded) {
-    printf("警告: 无法加载任何字体文件，将尝试加载系统默认字体\n");
+    Log("警告: 无法加载任何字体文件，将尝试加载系统默认字体\n");
 
     // 尝试加载更多系统字体作为fallback
     const char *fallbackPaths[] = {
@@ -692,16 +693,16 @@ int main() {
     };
 
     for (int i = 0; fallbackPaths[i] != NULL; i++) {
-      printf("尝试fallback字体: %s\n", fallbackPaths[i]);
+      Log("尝试fallback字体: %s\n", fallbackPaths[i]);
       if (Clay_WebGPU_LoadFont(app.clayRenderer, fallbackPaths[i], 16)) {
-        printf("成功加载fallback字体: %s\n", fallbackPaths[i]);
+        Log("成功加载fallback字体: %s\n", fallbackPaths[i]);
         fontLoaded = true;
         break;
       }
     }
 
     if (!fontLoaded) {
-      printf("错误: 无法加载任何字体文件，文本渲染将无法正常工作\n");
+      Log("错误: 无法加载任何字体文件，文本渲染将无法正常工作\n");
     }
   }
 

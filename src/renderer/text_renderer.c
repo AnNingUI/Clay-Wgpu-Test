@@ -1,5 +1,6 @@
 // text_renderer.c - 独立的文本渲染系统实现
 #include "text_renderer.h"
+#include "../DEV.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -386,7 +387,7 @@ static bool create_atlas(TextRenderer *renderer) {
 static bool create_bind_group(TextRenderer *renderer) {
   if (!text_bind_group_layout || !renderer->atlas.texture_view ||
       !renderer->atlas.sampler || !renderer->uniform_buffer) {
-    printf("创建绑定组失败：缺少必要资源\n");
+    Log("创建绑定组失败：缺少必要资源\n");
     return false;
   }
 
@@ -408,11 +409,11 @@ static bool create_bind_group(TextRenderer *renderer) {
       wgpuDeviceCreateBindGroup(renderer->device, &bind_group_desc);
 
   if (!renderer->atlas.bind_group) {
-    printf("创建文本绑定组失败\n");
+    Log("创建文本绑定组失败\n");
     return false;
   }
 
-  printf("文本绑定组创建成功\n");
+  Log("文本绑定组创建成功\n");
   return true;
 }
 
@@ -450,7 +451,7 @@ TextRenderer *text_renderer_create(WGPUDevice device, WGPUQueue queue,
     return NULL;
   }
 
-  printf("文本渲染器创建成功\n");
+  Log("文本渲染器创建成功\n");
   return renderer;
 }
 
@@ -497,7 +498,7 @@ void text_renderer_destroy(TextRenderer *renderer) {
   }
 
   free(renderer);
-  printf("文本渲染器已清理\n");
+  Log("文本渲染器已清理\n");
 }
 
 void text_renderer_update_screen_size(TextRenderer *renderer,
@@ -518,7 +519,7 @@ int text_renderer_load_font(TextRenderer *renderer, const char *font_path,
   // 读取字体文件
   FILE *file = fopen(font_path, "rb");
   if (!file) {
-    printf("无法打开字体文件: %s\n", font_path);
+    Log("无法打开字体文件: %s\n", font_path);
     return -1;
   }
 
@@ -528,7 +529,7 @@ int text_renderer_load_font(TextRenderer *renderer, const char *font_path,
 
   if (file_size <= 0) {
     fclose(file);
-    printf("字体文件大小无效: %s\n", font_path);
+    Log("字体文件大小无效: %s\n", font_path);
     return -1;
   }
 
@@ -543,7 +544,7 @@ int text_renderer_load_font(TextRenderer *renderer, const char *font_path,
 
   if (read_size != file_size) {
     free(font_buffer);
-    printf("读取字体文件失败: %s\n", font_path);
+    Log("读取字体文件失败: %s\n", font_path);
     return -1;
   }
 
@@ -553,7 +554,7 @@ int text_renderer_load_font(TextRenderer *renderer, const char *font_path,
 
   if (!stbtt_InitFont(&font->font_info, font_buffer, 0)) {
     free(font_buffer);
-    printf("初始化字体失败: %s\n", font_path);
+    Log("初始化字体失败: %s\n", font_path);
     return -1;
   }
 
@@ -579,7 +580,7 @@ int text_renderer_load_font(TextRenderer *renderer, const char *font_path,
     renderer->default_font_id = font_id;
   }
 
-  printf("字体加载成功: %s (ID: %d, 大小: %d)\n", font_path, font_id,
+  Log("字体加载成功: %s (ID: %d, 大小: %d)\n", font_path, font_id,
          font_size);
   return font_id;
 }
@@ -671,7 +672,7 @@ bool text_renderer_generate_glyph(TextRenderer *renderer, uint32_t codepoint,
   }
 
   if (renderer->atlas.current_y + height + 1 >= TEXT_ATLAS_HEIGHT) {
-    printf("字体图集空间不足，无法生成字形 U+%04X\n", codepoint);
+    Log("字体图集空间不足，无法生成字形 U+%04X\n", codepoint);
     return false;
   }
 
@@ -693,14 +694,14 @@ bool text_renderer_generate_glyph(TextRenderer *renderer, uint32_t codepoint,
       height, TEXT_ATLAS_WIDTH, font->scale, font->scale, codepoint);
 
   // 创建字形信息 - 使用准确的基线信息
-    TextGlyph glyph = {0};
-    glyph.codepoint = codepoint;
-    glyph.width = width;
-    glyph.height = height;
-    glyph.bearing_x = x0;
-    // bearing_y是从基线到字形顶部的距离（正值向上）
-    // stb_truetype返回的y1是从基线到字形底部的距离（负值）
-    glyph.bearing_y = -y1;
+  TextGlyph glyph = {0};
+  glyph.codepoint = codepoint;
+  glyph.width = width;
+  glyph.height = height;
+  glyph.bearing_x = x0;
+  // bearing_y是从基线到字形顶部的距离（正值向上）
+  // stb_truetype返回的y1是从基线到字形底部的距离（负值）
+  glyph.bearing_y = -y1;
   glyph.u0 = (float)atlas_x / TEXT_ATLAS_WIDTH;
   glyph.v0 = (float)atlas_y / TEXT_ATLAS_HEIGHT;
   glyph.u1 = (float)(atlas_x + width) / TEXT_ATLAS_WIDTH;
@@ -725,10 +726,10 @@ bool text_renderer_generate_glyph(TextRenderer *renderer, uint32_t codepoint,
   renderer->atlas.dirty = true;
   renderer->dynamic_generations++;
 
-  printf("动态生成字形 U+%04X 到图集位置 (%d, %d), 尺寸 %dx%d, bearing(%.0f, "
-         "%.0f), advance %.2f\n",
-         codepoint, atlas_x, atlas_y, width, height, glyph.bearing_x,
-         glyph.bearing_y, glyph.advance);
+  Log("动态生成字形 U+%04X 到图集位置 (%d, %d), 尺寸 %dx%d, bearing(%.0f, "
+      "%.0f), advance %.2f\n",
+      codepoint, atlas_x, atlas_y, width, height, glyph.bearing_x,
+      glyph.bearing_y, glyph.advance);
 
   return true;
 }
@@ -754,7 +755,7 @@ void text_renderer_flush_atlas(TextRenderer *renderer) {
                         TEXT_ATLAS_WIDTH * TEXT_ATLAS_HEIGHT, &layout,
                         &writeSize);
 
-  printf("更新字体图集纹理 (当前位置: %d, %d)\n", renderer->atlas.current_x,
+  Log("更新字体图集纹理 (当前位置: %d, %d)\n", renderer->atlas.current_x,
          renderer->atlas.current_y);
 
   renderer->atlas.dirty = false;
@@ -825,7 +826,7 @@ void text_renderer_flush_batch(TextRenderer *renderer,
   if (!renderer || !render_pass || renderer->current_batch.char_count == 0)
     return;
 
-  printf("刷新文本批次：%d 个字符，%d 个顶点，%d 个索引\n",
+  Log("刷新文本批次：%d 个字符，%d 个顶点，%d 个索引\n",
          renderer->current_batch.char_count,
          renderer->current_batch.vertex_count,
          renderer->current_batch.index_count);
@@ -881,7 +882,7 @@ void text_renderer_add_char_to_batch(TextRenderer *renderer, uint32_t codepoint,
 
   // 检查是否需要刷新批次
   if (renderer->current_batch.char_count >= TEXT_MAX_CHARS_PER_BATCH) {
-    printf("警告：批次已满，无法添加更多字符\n");
+    Log("警告：批次已满，无法添加更多字符\n");
     return;
   }
 
@@ -895,13 +896,13 @@ void text_renderer_add_char_to_batch(TextRenderer *renderer, uint32_t codepoint,
 
   // 计算屏幕坐标 - 使用字形基线对齐
   float x1 = x + glyph->bearing_x;
-  float y1 = y - glyph->bearing_y - glyph->height;  // 从基线开始计算字形顶部
+  float y1 = y - glyph->bearing_y - glyph->height; // 从基线开始计算字形顶部
   float x2 = x1 + glyph->width;
   float y2 = y1 + glyph->height;
 
   // 调试：输出异常字符信息
   if (fabsf(glyph->bearing_y) > glyph->height * 0.5f) {
-    printf("警告：字符 U+%04X 的bearing_y值异常: bearing_y=%.1f, height=%.1f\n",
+    Log("警告：字符 U+%04X 的bearing_y值异常: bearing_y=%.1f, height=%.1f\n",
            codepoint, glyph->bearing_y, glyph->height);
   }
 
@@ -913,7 +914,7 @@ void text_renderer_add_char_to_batch(TextRenderer *renderer, uint32_t codepoint,
 
   // 确保坐标在合理范围内
   if (ndc_x1 < -2.0f || ndc_x1 > 2.0f || ndc_y1 < -2.0f || ndc_y1 > 2.0f) {
-    printf("警告：字符坐标超出范围 U+%04X at (%.2f, %.2f) -> NDC(%.2f, %.2f)\n",
+    Log("警告：字符坐标超出范围 U+%04X at (%.2f, %.2f) -> NDC(%.2f, %.2f)\n",
            codepoint, x1, y1, ndc_x1, ndc_y1);
     return;
   }
@@ -963,7 +964,7 @@ void text_renderer_add_char_to_batch(TextRenderer *renderer, uint32_t codepoint,
   renderer->current_batch.char_count++;
 
   // 调试输出
-  printf("添加字符 U+%04X 到批次: 屏幕(%.1f,%.1f-%.1f,%.1f) "
+  Log("添加字符 U+%04X 到批次: 屏幕(%.1f,%.1f-%.1f,%.1f) "
          "NDC(%.3f,%.3f-%.3f,%.3f) UV(%.3f,%.3f-%.3f,%.3f)\n",
          codepoint, x1, y1, x2, y2, ndc_x1, ndc_y1, ndc_x2, ndc_y2, glyph->u0,
          glyph->v0, glyph->u1, glyph->v1);
@@ -1051,11 +1052,11 @@ void text_renderer_render_clay_text(TextRenderer *renderer,
   float ascent = font->ascent * font->scale;
   float descent = font->descent * font->scale;
   float font_height = ascent - descent;
-  
+
   // 使用字体基线作为参考，字形会自然对齐到基线
   float baseline_y = bbox.y + bbox.height - (bbox.height - font_height) / 2.0f;
 
-  //   printf("渲染Clay文本: \"%.*s\" 在位置 (%.1f, %.1f), 字体大小 %d, 基线
+  //   Log("渲染Clay文本: \"%.*s\" 在位置 (%.1f, %.1f), 字体大小 %d, 基线
   //   %.1f\n",
   //          (int)text_data->stringContents.length,
   //          text_data->stringContents.chars, bbox.x, baseline_y,
@@ -1080,15 +1081,15 @@ void text_renderer_print_stats(TextRenderer *renderer) {
   if (!renderer)
     return;
 
-  printf("=== 文本渲染器统计信息 ===\n");
-  printf("已加载字体数量: %d\n", renderer->font_count);
-  printf("默认字体ID: %d\n", renderer->default_font_id);
-  printf("缓存命中: %d\n", renderer->cache_hits);
-  printf("缓存未命中: %d\n", renderer->cache_misses);
-  printf("动态生成字形数: %d\n", renderer->dynamic_generations);
-  printf("图集当前位置: (%d, %d)\n", renderer->atlas.current_x,
+  Log("=== 文本渲染器统计信息 ===\n");
+  Log("已加载字体数量: %d\n", renderer->font_count);
+  Log("默认字体ID: %d\n", renderer->default_font_id);
+  Log("缓存命中: %d\n", renderer->cache_hits);
+  Log("缓存未命中: %d\n", renderer->cache_misses);
+  Log("动态生成字形数: %d\n", renderer->dynamic_generations);
+  Log("图集当前位置: (%d, %d)\n", renderer->atlas.current_x,
          renderer->atlas.current_y);
-  printf("当前批次字符数: %d\n", renderer->current_batch.char_count);
+  Log("当前批次字符数: %d\n", renderer->current_batch.char_count);
 
   // 计算缓存使用率
   int occupied_slots = 0;
@@ -1097,9 +1098,9 @@ void text_renderer_print_stats(TextRenderer *renderer) {
       occupied_slots++;
     }
   }
-  printf("缓存使用率: %d/%d (%.1f%%)\n", occupied_slots, TEXT_GLYPH_CACHE_SIZE,
+  Log("缓存使用率: %d/%d (%.1f%%)\n", occupied_slots, TEXT_GLYPH_CACHE_SIZE,
          (float)occupied_slots / TEXT_GLYPH_CACHE_SIZE * 100.0f);
-  printf("=========================\n");
+  Log("=========================\n");
 }
 
 void text_renderer_reset_stats(TextRenderer *renderer) {
