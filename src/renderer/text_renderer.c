@@ -13,11 +13,13 @@ static const char *text_vertex_shader_wgsl =
     "struct VertexInput {\n"
     "    @location(0) position: vec2<f32>,\n"
     "    @location(1) texCoords: vec2<f32>,\n"
+    "    @location(2) color: vec4<f32>,\n"
     "}\n"
     "\n"
     "struct VertexOutput {\n"
     "    @builtin(position) position: vec4<f32>,\n"
     "    @location(0) texCoords: vec2<f32>,\n"
+    "    @location(1) color: vec4<f32>,\n"
     "}\n"
     "\n"
     "@vertex\n"
@@ -25,23 +27,24 @@ static const char *text_vertex_shader_wgsl =
     "    var output: VertexOutput;\n"
     "    output.position = vec4<f32>(input.position, 0.0, 1.0);\n"
     "    output.texCoords = input.texCoords;\n"
+    "    output.color = input.color;\n"
     "    return output;\n"
     "}\n";
 
 static const char *text_fragment_shader_wgsl =
     "struct FragmentInput {\n"
     "    @location(0) texCoords: vec2<f32>,\n"
+    "    @location(1) color: vec4<f32>,\n"
     "}\n"
     "\n"
     "@group(0) @binding(0) var textTexture: texture_2d<f32>;\n"
     "@group(0) @binding(1) var textSampler: sampler;\n"
-    "@group(0) @binding(2) var<uniform> textColor: vec4<f32>;\n"
     "\n"
     "@fragment\n"
     "fn fs_main(input: FragmentInput) -> @location(0) vec4<f32> {\n"
     "    let alpha = textureSample(textTexture, textSampler, "
     "input.texCoords).r;\n"
-    "    return vec4<f32>(textColor.rgb, textColor.a * alpha);\n"
+    "    return vec4<f32>(input.color.rgb, input.color.a * alpha);\n"
     "}\n";
 
 // UTF-8解码实现（改进版）
@@ -210,7 +213,7 @@ static bool create_text_pipeline(TextRenderer *renderer) {
   WGPUShaderModule fragment_shader =
       wgpuDeviceCreateShaderModule(renderer->device, &fragment_shader_desc);
 
-  // 创建绑定组布局
+  // 创建绑定组布局（移除uniform buffer）
   WGPUBindGroupLayoutEntry bind_group_entries[] = {
       {.binding = 0,
        .visibility = WGPUShaderStage_Fragment,
@@ -219,15 +222,10 @@ static bool create_text_pipeline(TextRenderer *renderer) {
                    .multisampled = false}},
       {.binding = 1,
        .visibility = WGPUShaderStage_Fragment,
-       .sampler = {.type = WGPUSamplerBindingType_Filtering}},
-      {.binding = 2,
-       .visibility = WGPUShaderStage_Fragment,
-       .buffer = {.type = WGPUBufferBindingType_Uniform,
-                  .hasDynamicOffset = false,
-                  .minBindingSize = sizeof(float) * 4}}};
+       .sampler = {.type = WGPUSamplerBindingType_Filtering}}};
 
   WGPUBindGroupLayoutDescriptor bind_group_layout_desc = {
-      .entryCount = 3, .entries = bind_group_entries};
+      .entryCount = 2, .entries = bind_group_entries};
 
   text_bind_group_layout = wgpuDeviceCreateBindGroupLayout(
       renderer->device, &bind_group_layout_desc);
@@ -238,17 +236,20 @@ static bool create_text_pipeline(TextRenderer *renderer) {
   WGPUPipelineLayout pipeline_layout =
       wgpuDeviceCreatePipelineLayout(renderer->device, &pipeline_layout_desc);
 
-  // 顶点属性
+  // 顶点属性（包含颜色）
   WGPUVertexAttribute vertex_attributes[] = {
       {.format = WGPUVertexFormat_Float32x2, .offset = 0, .shaderLocation = 0},
       {.format = WGPUVertexFormat_Float32x2,
        .offset = sizeof(float) * 2,
-       .shaderLocation = 1}};
+       .shaderLocation = 1},
+      {.format = WGPUVertexFormat_Float32x4,
+       .offset = sizeof(float) * 4,
+       .shaderLocation = 2}};
 
   WGPUVertexBufferLayout vertex_buffer_layout = {
-      .arrayStride = sizeof(float) * 4,
+      .arrayStride = sizeof(float) * 8,
       .stepMode = WGPUVertexStepMode_Vertex,
-      .attributeCount = 2,
+      .attributeCount = 3,
       .attributes = vertex_attributes};
 
   // 混合状态
@@ -298,13 +299,13 @@ static bool create_text_pipeline(TextRenderer *renderer) {
 
 // 创建缓冲区
 static bool create_buffers(TextRenderer *renderer) {
-  // 顶点缓冲区
+  // 顶点缓冲区（更新大小以包含颜色数据）
   renderer->vertex_buffer = wgpuDeviceCreateBuffer(
       renderer->device,
       &(WGPUBufferDescriptor){
           .label = {.data = "Text Vertex Buffer", .length = WGPU_STRLEN},
           .usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst,
-          .size = TEXT_MAX_CHARS_PER_BATCH * 4 * 4 * sizeof(float),
+          .size = TEXT_MAX_CHARS_PER_BATCH * 4 * 8 * sizeof(float),
           .mappedAtCreation = false});
 
   // 索引缓冲区
@@ -316,17 +317,7 @@ static bool create_buffers(TextRenderer *renderer) {
           .size = TEXT_MAX_CHARS_PER_BATCH * 6 * sizeof(uint16_t),
           .mappedAtCreation = false});
 
-  // Uniform缓冲区
-  renderer->uniform_buffer = wgpuDeviceCreateBuffer(
-      renderer->device,
-      &(WGPUBufferDescriptor){
-          .label = {.data = "Text Uniform Buffer", .length = WGPU_STRLEN},
-          .usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst,
-          .size = sizeof(float) * 4,
-          .mappedAtCreation = false});
-
-  return renderer->vertex_buffer && renderer->index_buffer &&
-         renderer->uniform_buffer;
+  return renderer->vertex_buffer && renderer->index_buffer;
 }
 
 // 创建纹理图集
@@ -386,23 +377,19 @@ static bool create_atlas(TextRenderer *renderer) {
 
 static bool create_bind_group(TextRenderer *renderer) {
   if (!text_bind_group_layout || !renderer->atlas.texture_view ||
-      !renderer->atlas.sampler || !renderer->uniform_buffer) {
+      !renderer->atlas.sampler) {
     Log("创建绑定组失败：缺少必要资源\n");
     return false;
   }
 
   WGPUBindGroupEntry bind_group_entries[] = {
       {.binding = 0, .textureView = renderer->atlas.texture_view},
-      {.binding = 1, .sampler = renderer->atlas.sampler},
-      {.binding = 2,
-       .buffer = renderer->uniform_buffer,
-       .offset = 0,
-       .size = sizeof(float) * 4}};
+      {.binding = 1, .sampler = renderer->atlas.sampler}};
 
   WGPUBindGroupDescriptor bind_group_desc = {
       .label = {.data = "Text Bind Group", .length = WGPU_STRLEN},
       .layout = text_bind_group_layout,
-      .entryCount = 3,
+      .entryCount = 2,
       .entries = bind_group_entries};
 
   renderer->atlas.bind_group =
@@ -434,7 +421,7 @@ TextRenderer *text_renderer_create(WGPUDevice device, WGPUQueue queue,
 
   // 分配批次缓冲区
   renderer->current_batch.vertex_data =
-      malloc(TEXT_MAX_CHARS_PER_BATCH * 4 * 4 * sizeof(float));
+      malloc(TEXT_MAX_CHARS_PER_BATCH * 4 * 8 * sizeof(float));
   renderer->current_batch.index_data =
       malloc(TEXT_MAX_CHARS_PER_BATCH * 6 * sizeof(uint16_t));
 
@@ -480,8 +467,6 @@ void text_renderer_destroy(TextRenderer *renderer) {
     wgpuTextureRelease(renderer->atlas.texture);
 
   // 释放缓冲区
-  if (renderer->uniform_buffer)
-    wgpuBufferRelease(renderer->uniform_buffer);
   if (renderer->index_buffer)
     wgpuBufferRelease(renderer->index_buffer);
   if (renderer->vertex_buffer)
@@ -580,8 +565,7 @@ int text_renderer_load_font(TextRenderer *renderer, const char *font_path,
     renderer->default_font_id = font_id;
   }
 
-  Log("字体加载成功: %s (ID: %d, 大小: %d)\n", font_path, font_id,
-         font_size);
+  Log("字体加载成功: %s (ID: %d, 大小: %d)\n", font_path, font_id, font_size);
   return font_id;
 }
 
@@ -756,7 +740,7 @@ void text_renderer_flush_atlas(TextRenderer *renderer) {
                         &writeSize);
 
   Log("更新字体图集纹理 (当前位置: %d, %d)\n", renderer->atlas.current_x,
-         renderer->atlas.current_y);
+      renderer->atlas.current_y);
 
   renderer->atlas.dirty = false;
 }
@@ -827,24 +811,15 @@ void text_renderer_flush_batch(TextRenderer *renderer,
     return;
 
   Log("刷新文本批次：%d 个字符，%d 个顶点，%d 个索引\n",
-         renderer->current_batch.char_count,
-         renderer->current_batch.vertex_count,
-         renderer->current_batch.index_count);
+      renderer->current_batch.char_count, renderer->current_batch.vertex_count,
+      renderer->current_batch.index_count);
 
   // 刷新图集纹理（如果有更新）
   text_renderer_flush_atlas(renderer);
 
-  // 更新uniform缓冲区颜色
-  float color_data[4] = {renderer->current_batch.color.r / 255.0f,
-                         renderer->current_batch.color.g / 255.0f,
-                         renderer->current_batch.color.b / 255.0f,
-                         renderer->current_batch.color.a / 255.0f};
-  wgpuQueueWriteBuffer(renderer->queue, renderer->uniform_buffer, 0, color_data,
-                       sizeof(color_data));
-
   // 上传顶点和索引数据
   size_t vertex_data_size =
-      renderer->current_batch.vertex_count * 4 * sizeof(float);
+      renderer->current_batch.vertex_count * 8 * sizeof(float);
   size_t index_data_size =
       renderer->current_batch.index_count * sizeof(uint16_t);
 
@@ -876,7 +851,8 @@ void text_renderer_flush_batch(TextRenderer *renderer,
 }
 
 void text_renderer_add_char_to_batch(TextRenderer *renderer, uint32_t codepoint,
-                                     float x, float y, int font_id) {
+                                     float x, float y, int font_id,
+                                     Clay_Color color) {
   if (!renderer)
     return;
 
@@ -903,7 +879,7 @@ void text_renderer_add_char_to_batch(TextRenderer *renderer, uint32_t codepoint,
   // 调试：输出异常字符信息
   if (fabsf(glyph->bearing_y) > glyph->height * 0.5f) {
     Log("警告：字符 U+%04X 的bearing_y值异常: bearing_y=%.1f, height=%.1f\n",
-           codepoint, glyph->bearing_y, glyph->height);
+        codepoint, glyph->bearing_y, glyph->height);
   }
 
   // 转换为NDC坐标
@@ -915,37 +891,53 @@ void text_renderer_add_char_to_batch(TextRenderer *renderer, uint32_t codepoint,
   // 确保坐标在合理范围内
   if (ndc_x1 < -2.0f || ndc_x1 > 2.0f || ndc_y1 < -2.0f || ndc_y1 > 2.0f) {
     Log("警告：字符坐标超出范围 U+%04X at (%.2f, %.2f) -> NDC(%.2f, %.2f)\n",
-           codepoint, x1, y1, ndc_x1, ndc_y1);
+        codepoint, x1, y1, ndc_x1, ndc_y1);
     return;
   }
 
-  // 添加顶点数据
+  // 添加顶点数据（包含颜色）
   int base_vertex = renderer->current_batch.vertex_count;
-  float *vertices = renderer->current_batch.vertex_data + base_vertex * 4;
+  float *vertices = renderer->current_batch.vertex_data + base_vertex * 8;
 
   // 左上
   vertices[0] = ndc_x1;
   vertices[1] = ndc_y1;
   vertices[2] = glyph->u0;
   vertices[3] = glyph->v0;
-  vertices += 4;
+  vertices[4] = color.r / 255.0f;
+  vertices[5] = color.g / 255.0f;
+  vertices[6] = color.b / 255.0f;
+  vertices[7] = color.a / 255.0f;
+  vertices += 8;
   // 右上
   vertices[0] = ndc_x2;
   vertices[1] = ndc_y1;
   vertices[2] = glyph->u1;
   vertices[3] = glyph->v0;
-  vertices += 4;
+  vertices[4] = color.r / 255.0f;
+  vertices[5] = color.g / 255.0f;
+  vertices[6] = color.b / 255.0f;
+  vertices[7] = color.a / 255.0f;
+  vertices += 8;
   // 左下
   vertices[0] = ndc_x1;
   vertices[1] = ndc_y2;
   vertices[2] = glyph->u0;
   vertices[3] = glyph->v1;
-  vertices += 4;
+  vertices[4] = color.r / 255.0f;
+  vertices[5] = color.g / 255.0f;
+  vertices[6] = color.b / 255.0f;
+  vertices[7] = color.a / 255.0f;
+  vertices += 8;
   // 右下
   vertices[0] = ndc_x2;
   vertices[1] = ndc_y2;
   vertices[2] = glyph->u1;
   vertices[3] = glyph->v1;
+  vertices[4] = color.r / 255.0f;
+  vertices[5] = color.g / 255.0f;
+  vertices[6] = color.b / 255.0f;
+  vertices[7] = color.a / 255.0f;
 
   // 添加索引数据
   int base_index = renderer->current_batch.index_count;
@@ -965,9 +957,9 @@ void text_renderer_add_char_to_batch(TextRenderer *renderer, uint32_t codepoint,
 
   // 调试输出
   Log("添加字符 U+%04X 到批次: 屏幕(%.1f,%.1f-%.1f,%.1f) "
-         "NDC(%.3f,%.3f-%.3f,%.3f) UV(%.3f,%.3f-%.3f,%.3f)\n",
-         codepoint, x1, y1, x2, y2, ndc_x1, ndc_y1, ndc_x2, ndc_y2, glyph->u0,
-         glyph->v0, glyph->u1, glyph->v1);
+      "NDC(%.3f,%.3f-%.3f,%.3f) UV(%.3f,%.3f-%.3f,%.3f)\n",
+      codepoint, x1, y1, x2, y2, ndc_x1, ndc_y1, ndc_x2, ndc_y2, glyph->u0,
+      glyph->v0, glyph->u1, glyph->v1);
 }
 
 void text_renderer_render_string(TextRenderer *renderer,
@@ -984,13 +976,8 @@ void text_renderer_render_string(TextRenderer *renderer,
 
   // 只有在有render_pass时才检查是否需要刷新批次
   if (render_pass) {
-    // 检查是否需要切换字体或颜色
+    // 检查是否需要切换字体
     bool need_flush = (renderer->current_batch.font_id != font_id &&
-                       renderer->current_batch.char_count > 0) ||
-                      ((renderer->current_batch.color.r != color.r ||
-                        renderer->current_batch.color.g != color.g ||
-                        renderer->current_batch.color.b != color.b ||
-                        renderer->current_batch.color.a != color.a) &&
                        renderer->current_batch.char_count > 0);
 
     if (need_flush) {
@@ -1000,7 +987,6 @@ void text_renderer_render_string(TextRenderer *renderer,
 
   // 设置当前批次参数
   renderer->current_batch.font_id = font_id;
-  renderer->current_batch.color = color;
 
   // 渲染字符串
   const char *ptr = text;
@@ -1029,7 +1015,7 @@ void text_renderer_render_string(TextRenderer *renderer,
         text_renderer_get_glyph(renderer, result.codepoint, font_id);
     if (glyph) {
       text_renderer_add_char_to_batch(renderer, result.codepoint, cursor_x,
-                                      cursor_y, font_id);
+                                      cursor_y, font_id, color);
       cursor_x += glyph->advance;
     }
   }
@@ -1088,7 +1074,7 @@ void text_renderer_print_stats(TextRenderer *renderer) {
   Log("缓存未命中: %d\n", renderer->cache_misses);
   Log("动态生成字形数: %d\n", renderer->dynamic_generations);
   Log("图集当前位置: (%d, %d)\n", renderer->atlas.current_x,
-         renderer->atlas.current_y);
+      renderer->atlas.current_y);
   Log("当前批次字符数: %d\n", renderer->current_batch.char_count);
 
   // 计算缓存使用率
@@ -1099,7 +1085,7 @@ void text_renderer_print_stats(TextRenderer *renderer) {
     }
   }
   Log("缓存使用率: %d/%d (%.1f%%)\n", occupied_slots, TEXT_GLYPH_CACHE_SIZE,
-         (float)occupied_slots / TEXT_GLYPH_CACHE_SIZE * 100.0f);
+      (float)occupied_slots / TEXT_GLYPH_CACHE_SIZE * 100.0f);
   Log("=========================\n");
 }
 

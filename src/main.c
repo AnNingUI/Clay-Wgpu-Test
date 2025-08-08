@@ -56,14 +56,6 @@ typedef struct {
   uint32_t windowHeight;
 } AppContext;
 
-// 颜色常量定义
-const Clay_Color COLOR_BACKGROUND$1 = {240, 240, 245, 255};
-const Clay_Color COLOR_SIDEBAR = {200, 200, 210, 255};
-const Clay_Color COLOR_BUTTON = {100, 150, 200, 255};
-const Clay_Color COLOR_BUTTON_HOVER = {120, 170, 220, 255};
-const Clay_Color COLOR_TEXT = {50, 50, 50, 255};
-const Clay_Color COLOR_WHITE = {255, 255, 255, 255};
-
 // Clay错误处理函数
 void HandleClayErrors(Clay_ErrorData errorData) {
   Log("Clay Error: %s\n", errorData.errorText.chars);
@@ -72,26 +64,22 @@ void HandleClayErrors(Clay_ErrorData errorData) {
 // 文本测量函数 - 使用文本渲染器进行准确测量
 Clay_Dimensions MeasureText(Clay_StringSlice text,
                             Clay_TextElementConfig *config, void *userData) {
-    
-    AppContext *app = (AppContext *)userData;
-    if (!app || !app->clayRenderer || !app->clayRenderer->textRenderer) {
-        // 回退到简单估计
-        return (Clay_Dimensions){.width = text.length * config->fontSize * 0.6f,
-                                 .height = config->fontSize};
-    }
-    
-    // 使用文本渲染器测量文本
-    float width = text_renderer_measure_string_width(
-        app->clayRenderer->textRenderer, 
-        text.chars, 
-        config->fontId, 
-        text.length);
-    
-    float height = text_renderer_get_line_height(
-        app->clayRenderer->textRenderer, 
-        config->fontId);
-    
-    return (Clay_Dimensions){.width = width, .height = height};
+
+  AppContext *app = (AppContext *)userData;
+  if (!app || !app->clayRenderer || !app->clayRenderer->textRenderer) {
+    // 回退到简单估计
+    return (Clay_Dimensions){.width = text.length * config->fontSize * 0.6f,
+                             .height = config->fontSize};
+  }
+
+  // 使用文本渲染器测量文本
+  float width = text_renderer_measure_string_width(
+      app->clayRenderer->textRenderer, text.chars, config->fontId, text.length);
+
+  float height = text_renderer_get_line_height(app->clayRenderer->textRenderer,
+                                               config->fontId);
+
+  return (Clay_Dimensions){.width = width, .height = height};
 }
 
 // 创建WebGPU表面 - 跨平台实现
@@ -136,8 +124,7 @@ void OnAdapterRequestEnded(WGPURequestAdapterStatus status, WGPUAdapter adapter,
   if (status == WGPURequestAdapterStatus_Success) {
     *(WGPUAdapter *)userdata1 = adapter;
   } else {
-    Log("Failed to request adapter: %.*s\n", (int)message.length,
-           message.data);
+    Log("Failed to request adapter: %.*s\n", (int)message.length, message.data);
   }
 }
 
@@ -148,8 +135,7 @@ void OnDeviceRequestEnded(WGPURequestDeviceStatus status, WGPUDevice device,
   if (status == WGPURequestDeviceStatus_Success) {
     *(WGPUDevice *)userdata1 = device;
   } else {
-    Log("Failed to request device: %.*s\n", (int)message.length,
-           message.data);
+    Log("Failed to request device: %.*s\n", (int)message.length, message.data);
   }
 }
 
@@ -200,11 +186,11 @@ bool InitializeWebGPU(AppContext *app) {
   WGPUAdapterInfo adapterInfo;
   wgpuAdapterGetInfo(adapter, &adapterInfo);
   Log("Adapter: %.*s\n", (int)adapterInfo.description.length,
-         adapterInfo.description.data);
+      adapterInfo.description.data);
   Log("Vendor: %.*s\n", (int)adapterInfo.vendor.length,
-         adapterInfo.vendor.data);
+      adapterInfo.vendor.data);
   Log("Device: %.*s\n", (int)adapterInfo.device.length,
-         adapterInfo.device.data);
+      adapterInfo.device.data);
 
   // 请求设备
   WGPUDeviceDescriptor deviceDesc = {0};
@@ -292,114 +278,111 @@ void CreateAppLayout(AppContext *app) {
     HeaderComponent(CLAY_STRING("Clay 响应式 UI 示例"));
     CLAY_TEXT(CLAY_STRING("Test UI"),
               CLAY_TEXT_CONFIG(
-                  {.fontId = 0, .fontSize = 20, .textColor =
-                  PRIMARY_COLOR}));
+                  {.fontId = 0, .fontSize = 20, .textColor = PRIMARY_COLOR}));
 
     // 内容区域
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
                      .padding = {20, 20, 20, 20},
                      .childGap = 20,
                      .layoutDirection = CLAY_TOP_TO_BOTTOM}}) {
-    // 响应式卡片网格
-    ResponsiveCardGrid();
+      // 响应式卡片网格
+      ResponsiveCardGrid();
 
-    // // 按钮区域
-    CLAY({.layout = {
-              .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(60)},
-              .layoutDirection = CLAY_LEFT_TO_RIGHT,
-              .childGap = 15,
-              .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
-
-      ButtonComponent(&(ButtonData){.text = CLAY_STRING("主要按钮"),
-                                    .backgroundColor = PRIMARY_COLOR,
-                                    .buttonId = primaryButtonId,
-                                    .on_click = onPrimaryButtonClick});
-      ButtonComponent(&(ButtonData){.text = CLAY_STRING("次要按钮"),
-                                    .backgroundColor = SECONDARY_COLOR,
-                                    .buttonId = secondaryButtonId,
-                                    .on_click = onSecondaryButtonClick});
-      ButtonComponent(&(ButtonData){.text = CLAY_STRING("强调按钮"),
-                                    .backgroundColor = ACCENT_COLOR,
-                                    .buttonId = accentButtonId,
-                                    .on_click = onAccentButtonClick});
-    }
-
-    // 信息区域
-    CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
-                     .padding = {20, 20, 20, 20},
-                     .childGap = 15,
-                     .layoutDirection = CLAY_TOP_TO_BOTTOM},
-          .backgroundColor = CARD_COLOR,
-          .cornerRadius = CLAY_CORNER_RADIUS(10)}) {
+      // // 按钮区域
       CLAY({.layout = {
-                .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(30)}}}) {
-        CLAY_TEXT(
-            CLAY_STRING("中文文本测试"),
-            CLAY_TEXT_CONFIG(
-                {.fontId = 0, .fontSize = 20, .textColor = PRIMARY_COLOR}));
+                .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(60)},
+                .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                .childGap = 15,
+                .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
+
+        ButtonComponent(&(ButtonData){.text = CLAY_STRING("主要按钮"),
+                                      .backgroundColor = PRIMARY_COLOR,
+                                      .buttonId = primaryButtonId,
+                                      .on_click = onPrimaryButtonClick});
+        ButtonComponent(&(ButtonData){.text = CLAY_STRING("次要按钮"),
+                                      .backgroundColor = SECONDARY_COLOR,
+                                      .buttonId = secondaryButtonId,
+                                      .on_click = onSecondaryButtonClick});
+        ButtonComponent(&(ButtonData){.text = CLAY_STRING("强调按钮"),
+                                      .backgroundColor = ACCENT_COLOR,
+                                      .buttonId = accentButtonId,
+                                      .on_click = onAccentButtonClick});
       }
-      
-      // 中文文本测试
-      CLAY_TEXT(
-          CLAY_STRING("你好世界！这是中文文本渲染测试。"),
-          CLAY_TEXT_CONFIG(
-              {.fontId = 0, .fontSize = 16, .textColor = TEXT_COLOR}));
 
-      // 根据窗口大小动态调整布局
-      Clay_Context *context = Clay_GetCurrentContext();
-      int currentWidth = Clay_GetLayoutDirectionWidth(context);
-
-      // 在小屏幕上使用垂直布局，在大屏幕上使用水平布局
-      Clay_LayoutDirection featureLayoutDirection =
-          (currentWidth < 768) ? CLAY_TOP_TO_BOTTOM : CLAY_LEFT_TO_RIGHT;
-
+      // 信息区域
       CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
-                       .layoutDirection = featureLayoutDirection,
-                       .childGap = 15}}) {
+                       .padding = {20, 20, 20, 20},
+                       .childGap = 15,
+                       .layoutDirection = CLAY_TOP_TO_BOTTOM},
+            .backgroundColor = CARD_COLOR,
+            .cornerRadius = CLAY_CORNER_RADIUS(10)}) {
         CLAY({.layout = {
-                  .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(20)},
-                  .layoutDirection = CLAY_LEFT_TO_RIGHT,
-                  .childGap = 10}}) {
-          CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(10),
-                                      CLAY_SIZING_FIXED(10)}},
-                .backgroundColor = ACCENT_COLOR,
-                .cornerRadius = CLAY_CORNER_RADIUS(5)}) {}
+                  .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(30)}}}) {
           CLAY_TEXT(
-              CLAY_STRING("基于窗口大小的自适应布局"),
+              CLAY_STRING("中文文本测试"),
               CLAY_TEXT_CONFIG(
-                  {.fontId = 0, .fontSize = 14, .textColor = TEXT_COLOR}));
+                  {.fontId = 0, .fontSize = 20, .textColor = PRIMARY_COLOR}));
         }
 
-        CLAY({.layout = {
-                  .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(20)},
-                  .layoutDirection = CLAY_LEFT_TO_RIGHT,
-                  .childGap = 10}}) {
-          CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(10),
-                                      CLAY_SIZING_FIXED(10)}},
-                .backgroundColor = ACCENT_COLOR,
-                .cornerRadius = CLAY_CORNER_RADIUS(5)}) {}
-          CLAY_TEXT(
-              CLAY_STRING("百分比尺寸支持"),
-              CLAY_TEXT_CONFIG(
-                  {.fontId = 0, .fontSize = 14, .textColor = TEXT_COLOR}));
-        }
+        // 中文文本测试
+        CLAY_TEXT(CLAY_STRING("你好世界！这是中文文本渲染测试。"),
+                  CLAY_TEXT_CONFIG(
+                      {.fontId = 0, .fontSize = 16, .textColor = TEXT_COLOR}));
 
-        CLAY({.layout = {
-                  .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(20)},
-                  .layoutDirection = CLAY_LEFT_TO_RIGHT,
-                  .childGap = 10}}) {
-          CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(10),
-                                      CLAY_SIZING_FIXED(10)}},
-                .backgroundColor = ACCENT_COLOR,
-                .cornerRadius = CLAY_CORNER_RADIUS(5)}) {}
-          CLAY_TEXT(
-              CLAY_STRING("动态组件重排"),
-              CLAY_TEXT_CONFIG(
-                  {.fontId = 0, .fontSize = 14, .textColor = TEXT_COLOR}));
+        // 根据窗口大小动态调整布局
+        Clay_Context *context = Clay_GetCurrentContext();
+        int currentWidth = Clay_GetLayoutDirectionWidth(context);
+
+        // 在小屏幕上使用垂直布局，在大屏幕上使用水平布局
+        Clay_LayoutDirection featureLayoutDirection =
+            (currentWidth < 768) ? CLAY_TOP_TO_BOTTOM : CLAY_LEFT_TO_RIGHT;
+
+        CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
+                         .layoutDirection = featureLayoutDirection,
+                         .childGap = 15}}) {
+          CLAY({.layout = {
+                    .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(20)},
+                    .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                    .childGap = 10}}) {
+            CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(10),
+                                        CLAY_SIZING_FIXED(10)}},
+                  .backgroundColor = ACCENT_COLOR,
+                  .cornerRadius = CLAY_CORNER_RADIUS(5)}) {}
+            CLAY_TEXT(
+                CLAY_STRING("基于窗口大小的自适应布局"),
+                CLAY_TEXT_CONFIG(
+                    {.fontId = 0, .fontSize = 14, .textColor = TEXT_COLOR}));
+          }
+
+          CLAY({.layout = {
+                    .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(20)},
+                    .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                    .childGap = 10}}) {
+            CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(10),
+                                        CLAY_SIZING_FIXED(10)}},
+                  .backgroundColor = ACCENT_COLOR,
+                  .cornerRadius = CLAY_CORNER_RADIUS(5)}) {}
+            CLAY_TEXT(
+                CLAY_STRING("百分比尺寸支持"),
+                CLAY_TEXT_CONFIG(
+                    {.fontId = 0, .fontSize = 14, .textColor = TEXT_COLOR}));
+          }
+
+          CLAY({.layout = {
+                    .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(20)},
+                    .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                    .childGap = 10}}) {
+            CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(10),
+                                        CLAY_SIZING_FIXED(10)}},
+                  .backgroundColor = ACCENT_COLOR,
+                  .cornerRadius = CLAY_CORNER_RADIUS(5)}) {}
+            CLAY_TEXT(
+                CLAY_STRING("动态组件重排"),
+                CLAY_TEXT_CONFIG(
+                    {.fontId = 0, .fontSize = 14, .textColor = TEXT_COLOR}));
+          }
         }
       }
-    }
-
     }
   }
 }
@@ -610,35 +593,35 @@ int main() {
 
   // 使用新的文本渲染系统加载字体 - 优先加载支持中文的字体
   Log("=== 开始加载字体 ===\n");
-  
+
   // 检查系统字体目录
 #ifdef _WIN32
   Log("检测到Windows系统，检查系统字体目录...\n");
   const char *fontPaths[] = {
-      "./fonts/msyh.ttc",           // 项目目录下的微软雅黑
-      "./fonts/simhei.ttf",         // 项目目录下的黑体
-      "./fonts/simsun.ttc",         // 项目目录下的宋体
-      "./fonts/arial.ttf",          // 项目目录下的Arial
-      "C:/Windows/Fonts/msyh.ttc",     // 系统微软雅黑
-      "C:/Windows/Fonts/msyhbd.ttc",   // 系统微软雅黑粗体
-      "C:/Windows/Fonts/simhei.ttf",   // 系统黑体
-      "C:/Windows/Fonts/simsun.ttc",   // 系统宋体
-      "C:/Windows/Fonts/simkai.ttf",   // 系统楷体
-      "C:/Windows/Fonts/arial.ttf",    // 系统Arial
-      "C:/Windows/Fonts/arialuni.ttf", // Arial Unicode（支持中文）
-      "C:/Windows/Fonts/calibri.ttf",
-      "C:/Windows/Fonts/segoeui.ttf",
+    "./fonts/msyh.ttc",              // 项目目录下的微软雅黑
+    "./fonts/simhei.ttf",            // 项目目录下的黑体
+    "./fonts/simsun.ttc",            // 项目目录下的宋体
+    "./fonts/arial.ttf",             // 项目目录下的Arial
+    "C:/Windows/Fonts/msyh.ttc",     // 系统微软雅黑
+    "C:/Windows/Fonts/msyhbd.ttc",   // 系统微软雅黑粗体
+    "C:/Windows/Fonts/simhei.ttf",   // 系统黑体
+    "C:/Windows/Fonts/simsun.ttc",   // 系统宋体
+    "C:/Windows/Fonts/simkai.ttf",   // 系统楷体
+    "C:/Windows/Fonts/arial.ttf",    // 系统Arial
+    "C:/Windows/Fonts/arialuni.ttf", // Arial Unicode（支持中文）
+    "C:/Windows/Fonts/calibri.ttf",
+    "C:/Windows/Fonts/segoeui.ttf",
 #elif defined(__APPLE__)
   Log("检测到macOS系统，检查系统字体目录...\n");
   const char *fontPaths[] = {
-      "./fonts/PingFang.ttc",       // 项目目录下的苹方
-      "./fonts/STHeiti Medium.ttc", // 项目目录下的华文黑体
-      "/System/Library/Fonts/Arial.ttf",
-      "/System/Library/Fonts/Helvetica.ttc",
-      "/System/Library/Fonts/SFNS.ttf",
-      "/System/Library/Fonts/STHeiti Medium.ttc",  // 华文黑体
-      "/System/Library/Fonts/STHeiti Light.ttc",   // 华文细黑
-      "/System/Library/Fonts/PingFang.ttc",        // 苹方
+    "./fonts/PingFang.ttc",       // 项目目录下的苹方
+    "./fonts/STHeiti Medium.ttc", // 项目目录下的华文黑体
+    "/System/Library/Fonts/Arial.ttf",
+    "/System/Library/Fonts/Helvetica.ttc",
+    "/System/Library/Fonts/SFNS.ttf",
+    "/System/Library/Fonts/STHeiti Medium.ttc", // 华文黑体
+    "/System/Library/Fonts/STHeiti Light.ttc",  // 华文细黑
+    "/System/Library/Fonts/PingFang.ttc",       // 苹方
 #elif defined(__linux__)
   Log("检测到Linux系统，检查系统字体目录...\n");
   const char *fontPaths[] = {
@@ -650,7 +633,8 @@ int main() {
       "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",    // Noto CJK
       "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
 #endif
-      NULL};
+    NULL
+  };
 
   bool fontLoaded = false;
   for (int i = 0; fontPaths[i] != NULL; i++) {
@@ -659,7 +643,7 @@ int main() {
     if (testFile) {
       fclose(testFile);
       Log("字体文件存在: %s\n", fontPaths[i]);
-      
+
       if (Clay_WebGPU_LoadFont(app.clayRenderer, fontPaths[i], 16)) {
         Log("✓ 成功加载字体: %s\n", fontPaths[i]);
         fontLoaded = true;
@@ -678,8 +662,7 @@ int main() {
     // 尝试加载更多系统字体作为fallback
     const char *fallbackPaths[] = {
 #ifdef _WIN32
-        "C:/Windows/Fonts/tahoma.ttf",
-        "C:/Windows/Fonts/verdana.ttf",
+        "C:/Windows/Fonts/tahoma.ttf", "C:/Windows/Fonts/verdana.ttf",
         "C:/Windows/Fonts/consola.ttf",
 #elif defined(__APPLE__)
         "/System/Library/Fonts/Helvetica.ttc",
@@ -689,8 +672,7 @@ int main() {
         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
         "/usr/share/fonts/TTF/DejaVuSans.ttf",
 #endif
-        NULL
-    };
+        NULL};
 
     for (int i = 0; fallbackPaths[i] != NULL; i++) {
       Log("尝试fallback字体: %s\n", fallbackPaths[i]);
