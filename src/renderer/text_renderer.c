@@ -533,15 +533,36 @@ int text_renderer_load_font(TextRenderer *renderer, const char *font_path,
     return -1;
   }
 
-  // 初始化字体
-  TextFont *font = &renderer->fonts[renderer->font_count];
-  memset(font, 0, sizeof(TextFont));
+  // 尝试不同的字体索引（支持TTC格式）
+  int font_index = 0;
+  int init_result = 0;
+  stbtt_fontinfo font_info;
 
-  if (!stbtt_InitFont(&font->font_info, font_buffer, 0)) {
+  do {
+    init_result =
+        stbtt_InitFont(&font_info, font_buffer,
+                       stbtt_GetFontOffsetForIndex(font_buffer, font_index));
+
+    if (init_result) {
+      break; // 成功初始化字体
+    }
+
+    font_index++;
+  } while (font_index < stbtt_GetNumberOfFonts(font_buffer) &&
+           stbtt_GetNumberOfFonts(font_buffer) > 0);
+
+  if (!init_result) {
     free(font_buffer);
     Log("初始化字体失败: %s\n", font_path);
     return -1;
   }
+
+  // 初始化字体
+  TextFont *font = &renderer->fonts[renderer->font_count];
+  memset(font, 0, sizeof(TextFont));
+
+  // 复制已初始化的字体信息
+  memcpy(&font->font_info, &font_info, sizeof(stbtt_fontinfo));
 
   // 设置字体信息
   font->font_id = renderer->font_count;

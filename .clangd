@@ -5,20 +5,15 @@
 CompileFlags:
   Compiler: gcc
   Add:
-    - -D_GNU_SOURCE=1
-    - -D__GNUC__=4
-    - -D_WIN64=1
     - -Wno-pragma-pack
     - -Wall
     - -Wno-missing-prototypes
-    - -D__WIN32__=1
-    - -D_WIN32=1
+    
     - -Ic:/llvm/include
     - -Id:/Software/Dev/msys64/ucrt64/include
+
     - -I../include
     - -I../../include
-    - --target=x86_64-pc-windows-msvc
-
 
 ---
 Diagnostics:

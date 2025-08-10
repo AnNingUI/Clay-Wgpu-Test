@@ -19,7 +19,15 @@ pub fn build(b: *std.Build) void {
         };
     }
 
-    const exe = b.addExecutable(.{ .name = name.items, .target = target, .optimize = optimize });
+    // 根据目标操作系统调整编译配置
+    const os_tag = target.result.os.tag;
+
+    // arch + os_tag + "clay_webgpu"
+    const all_name = std.fmt.allocPrint(b.allocator, "{s}-{s}-clay_webgpu", .{ name.items, @tagName(os_tag) }) catch |err| {
+        std.debug.panic("Failed to append os name: {}", .{err});
+    };
+
+    const exe = b.addExecutable(.{ .name = all_name, .target = target, .optimize = optimize });
 
     const cFiles = [_][]const u8{ "src/main.c", "src/DEV.c", "src/renderer/renderer.c", "src/renderer/text_renderer.c", "src/components/components.c" };
 
@@ -36,9 +44,6 @@ pub fn build(b: *std.Build) void {
     });
 
     exe.addIncludePath(b.path("include"));
-
-    // 根据目标操作系统调整编译配置
-    const os_tag = target.result.os.tag;
 
     // 设置平台特定的库路径和链接库
     switch (os_tag) {

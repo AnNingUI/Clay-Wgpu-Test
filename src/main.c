@@ -12,7 +12,7 @@
 #elif defined(__linux__)
 #define GLFW_EXPOSE_NATIVE_X11
 #include <GLFW/glfw3native.h>
-#include <X11/Xlib.h>
+#include <unistd.h>
 #elif defined(__APPLE__)
 #define GLFW_EXPOSE_NATIVE_COCOA
 #include <GLFW/glfw3native.h>
@@ -97,8 +97,8 @@ WGPUSurface CreateSurface(WGPUInstance instance, GLFWwindow *window) {
 #elif defined(__linux__)
   Display *display = glfwGetX11Display();
   Window x11Window = glfwGetX11Window(window);
-  WGPUSurfaceDescriptorFromXlibWindow surfaceDesc = {
-      .chain = {.sType = WGPUSType_SurfaceDescriptorFromXlibWindow},
+  WGPUSurfaceSourceXlibWindow surfaceDesc = {
+      .chain = {.sType = WGPUSType_SurfaceSourceXlibWindow},
       .display = display,
       .window = x11Window};
   WGPUSurfaceDescriptor desc = {.nextInChain =
@@ -185,12 +185,12 @@ bool InitializeWebGPU(AppContext *app) {
   // 检查适配器特性
   WGPUAdapterInfo adapterInfo;
   wgpuAdapterGetInfo(adapter, &adapterInfo);
-  Log("Adapter: %.*s\n", (int)adapterInfo.description.length,
-      adapterInfo.description.data);
-  Log("Vendor: %.*s\n", (int)adapterInfo.vendor.length,
-      adapterInfo.vendor.data);
-  Log("Device: %.*s\n", (int)adapterInfo.device.length,
-      adapterInfo.device.data);
+  printf("Adapter: %.*s\n", (int)adapterInfo.description.length,
+         adapterInfo.description.data);
+  printf("Vendor: %.*s\n", (int)adapterInfo.vendor.length,
+         adapterInfo.vendor.data);
+  printf("Device: %.*s\n", (int)adapterInfo.device.length,
+         adapterInfo.device.data);
 
   // 请求设备
   WGPUDeviceDescriptor deviceDesc = {0};
@@ -442,12 +442,8 @@ void RunApp(AppContext *app) {
       // 强制等待GPU完成
       wgpuDevicePoll(app->device, true, NULL);
 
-// 限制帧率，避免过快循环
-#ifdef _WIN32
-      Sleep(16);
-#else
-      usleep(16000);
-#endif
+      // 限制帧率，避免过快循环
+      VSleep(16);
 
       continue;
     }
@@ -592,14 +588,14 @@ int main() {
   }
 
   // 使用新的文本渲染系统加载字体 - 优先加载支持中文的字体
-  Log("=== 开始加载字体 ===\n");
+  printf("=== 开始加载字体 ===\n");
 
   // 检查系统字体目录
 #ifdef _WIN32
-  Log("检测到Windows系统，检查系统字体目录...\n");
+  printf("检测到Windows系统，检查系统字体目录...\n");
   const char *fontPaths[] = {
-    "./fonts/msyh.ttc",              // 项目目录下的微软雅黑
     "./fonts/simhei.ttf",            // 项目目录下的黑体
+    "./fonts/msyh.ttc",              // 项目目录下的微软雅黑
     "./fonts/simsun.ttc",            // 项目目录下的宋体
     "./fonts/arial.ttf",             // 项目目录下的Arial
     "C:/Windows/Fonts/msyh.ttc",     // 系统微软雅黑
@@ -612,7 +608,7 @@ int main() {
     "C:/Windows/Fonts/calibri.ttf",
     "C:/Windows/Fonts/segoeui.ttf",
 #elif defined(__APPLE__)
-  Log("检测到macOS系统，检查系统字体目录...\n");
+  printf("检测到macOS系统，检查系统字体目录...\n");
   const char *fontPaths[] = {
     "./fonts/PingFang.ttc",       // 项目目录下的苹方
     "./fonts/STHeiti Medium.ttc", // 项目目录下的华文黑体
@@ -623,15 +619,26 @@ int main() {
     "/System/Library/Fonts/STHeiti Light.ttc",  // 华文细黑
     "/System/Library/Fonts/PingFang.ttc",       // 苹方
 #elif defined(__linux__)
-  Log("检测到Linux系统，检查系统字体目录...\n");
+  printf("检测到Linux系统，检查系统字体目录...\n");
   const char *fontPaths[] = {
-      "./fonts/NotoSansCJK-Regular.ttc", // 项目目录下的Noto CJK
-      "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-      "/usr/share/fonts/TTF/arial.ttf",
-      "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-      "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf", // Android fallback
-      "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",    // Noto CJK
-      "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "./fonts/NotoSansCJK-Regular.ttc", // 项目目录下的Noto CJK
+
+    // 回退到系统字体
+    // 先查看是否安装思源系列
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc",
+    
+    // 再查看是否安装文泉驿或霞鹜文楷系列
+    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+    "/usr/share/fonts/truetype/lxgw-wenkai/LXGWWenKaiMono-Regular.ttf",
+    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+    "/usr/share/fonts/truetype/lxgw-wenkai/LXGWWenKai-Regular.ttf",
+
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",    // Noto CJK
+    "/usr/share/fonts/TTF/arial.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf", // Android fallback
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
 #endif
     NULL
   };
@@ -642,22 +649,22 @@ int main() {
     FILE *testFile = fopen(fontPaths[i], "rb");
     if (testFile) {
       fclose(testFile);
-      Log("字体文件存在: %s\n", fontPaths[i]);
+      printf("字体文件存在: %s\n", fontPaths[i]);
 
       if (Clay_WebGPU_LoadFont(app.clayRenderer, fontPaths[i], 16)) {
-        Log("✓ 成功加载字体: %s\n", fontPaths[i]);
+        printf("✓ 成功加载字体: %s\n", fontPaths[i]);
         fontLoaded = true;
         break;
       } else {
-        Log("✗ 无法加载字体: %s (文件存在但加载失败)\n", fontPaths[i]);
+        printf("✗ 无法加载字体: %s (文件存在但加载失败)\n", fontPaths[i]);
       }
     } else {
-      Log("字体文件不存在: %s\n", fontPaths[i]);
+      printf("字体文件不存在: %s\n", fontPaths[i]);
     }
   }
 
   if (!fontLoaded) {
-    Log("警告: 无法加载任何字体文件，将尝试加载系统默认字体\n");
+    printf("警告: 无法加载任何字体文件，将尝试加载系统默认字体\n");
 
     // 尝试加载更多系统字体作为fallback
     const char *fallbackPaths[] = {

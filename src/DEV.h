@@ -6,5 +6,6 @@
 
 extern const bool DEV_MODE;
 void Log(const char *format, ...);
+void VSleep(int s);
 
 #endif
