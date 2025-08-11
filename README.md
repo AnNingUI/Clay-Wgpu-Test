@@ -1,10 +1,11 @@
 ## 编译须知
 1.你的电脑里面需要以下Include
-> ps: clay.h 与 std_truetype.h已经内嵌到项目里面了，你不需要再下载了
+> ps: clay.h 与 std_truetype.h以及std_image.h已经内嵌到项目里面了，你不需要再下载了
  - **webgpu**: https://github.com/gfx-rs/wgpu-native
  - **GLFW**: https://www.glfw.org/
  - **clay.h**: https://github.com/nicbarker/clay
  - **std_truetype.h**: https://github.com/nothings/stb/blob/master/stb_truetype.h
+ - **std_image.h**: https://github.com/nothings/stb/blob/master/std_image.h
 
 ---
 
