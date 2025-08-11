@@ -23,3 +23,9 @@
 2.在Linux中需要安装Mesa库用于基本的图形渲染
   - 可选：Mesa默认使用llvmpipe运行，如果需要GPU渲染，请按照具体驱动
 3.不支持在MacOS上运行，因为MacOS我没有设备测试QwQ
+
+## 一些截图
+- Windows
+[windows-x86_64](./md-assets/windows-x86_64.png)
+- Linux(WSL)
+[linux_wsl-x86_64](./md-assets/linux_wsl-x86_64.png)
