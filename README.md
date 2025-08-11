@@ -26,6 +26,6 @@
 
 ## 一些截图
 - Windows
-[windows-x86_64](./md-assets/windows-x86_64.png)
+![windows-x86_64](./md-assets/windows-x86_64.png)
 - Linux(WSL)
-[linux_wsl-x86_64](./md-assets/linux_wsl-x86_64.png)
+![linux_wsl-x86_64](./md-assets/linux_wsl-x86_64.png)
