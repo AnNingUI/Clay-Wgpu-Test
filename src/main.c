@@ -1,5 +1,6 @@
 #include "DEV.h"
 #include "components/components.h"
+#include "renderer/image_renderer.h"
 #include "renderer/renderer.h"
 #include <GLFW/glfw3.h>
 #include <stdio.h>
@@ -8,7 +9,6 @@
 #ifdef _WIN32
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
-#include <windows.h>
 #elif defined(__linux__)
 #define GLFW_EXPOSE_NATIVE_X11
 #include <GLFW/glfw3native.h>
@@ -20,6 +20,8 @@
 
 // 添加文件指针用于日志记录
 static FILE *logFile = NULL;
+
+// static WGPUTexture myImage = createWebGPUTexture("image.png");
 
 // 重定向输出到文件的函数
 void SetupLogging() {
@@ -55,7 +57,22 @@ typedef struct {
   uint32_t windowWidth;
   uint32_t windowHeight;
   Clay_Vector2 scrollOffset;
+  ImageRenderer *g_imageRenderer;
 } AppContext;
+
+WebGPUImage *load_image(ImageRenderer *renderer, const char *imagePath) {
+
+  WebGPUImage *image = image_renderer_create_texture(renderer, imagePath);
+  if (!image) {
+    Log("加载图像失败: %s\n", imagePath);
+    return NULL;
+  }
+
+  Log("加载图像成功: %s (%dx%d)\n", imagePath, image->width, image->height);
+  return image;
+}
+
+WebGPUImage *test_img = NULL;
 
 // Clay错误处理函数
 void HandleClayErrors(Clay_ErrorData errorData) {
@@ -386,6 +403,23 @@ void CreateAppLayout(AppContext *app) {
                     {.fontId = 0, .fontSize = 14, .textColor = TEXT_COLOR}));
           }
         }
+
+        // 图片测试
+        CLAY_TEXT(CLAY_STRING("这是图片渲染测试。"),
+                  CLAY_TEXT_CONFIG(
+                      {.fontId = 0, .fontSize = 16, .textColor = TEXT_COLOR}));
+
+        Clay_LayoutConfig imageLayout = {
+            .sizing = {CLAY_SIZING_FIXED(128), CLAY_SIZING_FIXED(128)},
+        };
+
+        Clay_ElementDeclaration imageElement = {.id = CLAY_ID("TestImage"),
+                                                .layout = imageLayout,
+                                                .image = {
+                                                    .imageData = test_img,
+                                                }};
+
+        CLAY(imageElement);
       }
     }
   }
@@ -487,10 +521,52 @@ void RunApp(AppContext *app) {
     CreateAppLayout(app);
     Clay_RenderCommandArray renderCommands = Clay_EndLayout();
 
+    // 创建命令编码器
+    WGPUCommandEncoderDescriptor encoderDesc = {
+        .label = {.data = "Main Command Encoder", .length = WGPU_STRLEN}};
+    WGPUCommandEncoder encoder =
+        wgpuDeviceCreateCommandEncoder(app->device, &encoderDesc);
+
+    // 矩形和文本渲染
     app->clayRenderer->targetView = backBuffer;
     Clay_WebGPU_Render(app->clayRenderer, renderCommands);
 
-    // 确保渲染完成
+    // 使用图像渲染器渲染图像
+    if (app->g_imageRenderer) {
+      WGPURenderPassColorAttachment colorAttachment = {
+          .view = backBuffer,
+          .resolveTarget = NULL,
+          .clearValue = {0.0f, 0.0f, 0.0f, 0.0f}, // 不清除背景
+          .loadOp = WGPULoadOp_Load,              // 保持之前渲染的内容
+          .storeOp = WGPUStoreOp_Store};
+
+      WGPURenderPassDescriptor renderPassDesc = {
+          .label = {.data = "Image Render Pass", .length = WGPU_STRLEN},
+          .colorAttachmentCount = 1,
+          .colorAttachments = &colorAttachment};
+
+      WGPURenderPassEncoder renderPass =
+          wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
+
+      image_renderer_process_clay_commands(app->g_imageRenderer, renderPass,
+                                           renderCommands, app->windowWidth,
+                                           app->windowHeight);
+
+      wgpuRenderPassEncoderEnd(renderPass);
+      wgpuRenderPassEncoderRelease(renderPass);
+    }
+
+    // 提交命令
+    WGPUCommandBufferDescriptor commandBufferDesc = {
+        .label = {.data = "Main Command Buffer", .length = WGPU_STRLEN}};
+    WGPUCommandBuffer commandBuffer =
+        wgpuCommandEncoderFinish(encoder, &commandBufferDesc);
+
+    wgpuQueueSubmit(app->queue, 1, &commandBuffer);
+
+    // 清理资源
+    wgpuCommandBufferRelease(commandBuffer);
+    wgpuCommandEncoderRelease(encoder);
     wgpuDevicePoll(app->device, false, NULL);
     wgpuTextureViewRelease(backBuffer);
     wgpuSurfacePresent(app->surface);
@@ -540,6 +616,11 @@ void CleanupApp(AppContext *app) {
     app->window = NULL;
   }
 
+  if (app->g_imageRenderer) {
+    image_renderer_destroy(app->g_imageRenderer);
+    app->g_imageRenderer = NULL;
+  }
+
   glfwTerminate();
 }
 
@@ -580,6 +661,18 @@ int main() {
     CleanupApp(&app);
     return -1;
   }
+
+  // 初始化图像渲染器
+  ImageRenderer *g_imageRenderer = image_renderer_create(app.device, app.queue);
+  if (!g_imageRenderer) {
+    Log("图像渲染器初始化失败\n");
+    return -1;
+  }
+  Log("图像渲染器初始化成功\n");
+  app.g_imageRenderer = g_imageRenderer;
+
+  // 加载图像
+  test_img = load_image(g_imageRenderer, "./assets/img/10.png");
 
   // 初始化Clay
   uint64_t totalMemorySize = Clay_MinMemorySize();

@@ -29,7 +29,7 @@ pub fn build(b: *std.Build) void {
 
     const exe = b.addExecutable(.{ .name = all_name, .target = target, .optimize = optimize });
 
-    const cFiles = [_][]const u8{ "src/main.c", "src/DEV.c", "src/renderer/renderer.c", "src/renderer/text_renderer.c", "src/components/components.c" };
+    const cFiles = [_][]const u8{ "src/main.c", "src/DEV.c", "src/renderer/renderer.c", "src/renderer/text_renderer.c", "src/renderer/image_renderer.c", "src/clay_webgpu/runtime.c", "src/components/components.c" };
 
     const cFlags = [_][]const u8{
         "-std=c99",

@@ -67,37 +67,7 @@ static const char *fragmentShaderWGSL =
     "    return vec4<f32>(input.color.rgb, input.color.a * alpha);\n"
     "}\n";
 
-static const char *imageVertexShaderWGSL =
-    "struct VertexInput {\n"
-    "    @location(0) position: vec2<f32>,\n"
-    "    @location(1) texCoord: vec2<f32>,\n"
-    "}\n"
-    "\n"
-    "struct VertexOutput {\n"
-    "    @builtin(position) position: vec4<f32>,\n"
-    "    @location(0) texCoord: vec2<f32>,\n"
-    "}\n"
-    "\n"
-    "@vertex\n"
-    "fn vs_main(input: VertexInput) -> VertexOutput {\n"
-    "    var output: VertexOutput;\n"
-    "    output.position = vec4<f32>(input.position, 0.0, 1.0);\n"
-    "    output.texCoord = input.texCoord;\n"
-    "    return output;\n"
-    "}\n";
 
-static const char *imageFragmentShaderWGSL =
-    "@group(0) @binding(0) var textureSampler: sampler;\n"
-    "@group(0) @binding(1) var texture: texture_2d<f32>;\n"
-    "\n"
-    "struct FragmentInput {\n"
-    "    @location(0) texCoord: vec2<f32>,\n"
-    "}\n"
-    "\n"
-    "@fragment\n"
-    "fn fs_main(input: FragmentInput) -> @location(0) vec4<f32> {\n"
-    "    return textureSample(texture, textureSampler, input.texCoord);\n"
-    "}\n";
 
 Clay_WebGPU_Context *Clay_WebGPU_Initialize(WGPUDevice device, WGPUQueue queue,
                                             WGPUTextureView targetView,
@@ -243,164 +213,6 @@ Clay_WebGPU_Context *Clay_WebGPU_Initialize(WGPUDevice device, WGPUQueue queue,
   wgpuShaderModuleRelease(vertexShader);
   wgpuShaderModuleRelease(fragmentShader);
   wgpuPipelineLayoutRelease(pipelineLayout);
-
-  // 创建图像渲染管线
-  WGPUShaderSourceWGSL imageVertexShaderSource = {
-      .chain = {.sType = WGPUSType_ShaderSourceWGSL},
-      .code = {.data = imageVertexShaderWGSL, .length = WGPU_STRLEN}};
-
-  WGPUShaderModuleDescriptor imageVertexShaderDesc = {
-      .nextInChain = (const WGPUChainedStruct *)&imageVertexShaderSource,
-      .label = {.data = "Image Vertex Shader", .length = WGPU_STRLEN}};
-  WGPUShaderModule imageVertexShader =
-      wgpuDeviceCreateShaderModule(device, &imageVertexShaderDesc);
-
-  WGPUShaderSourceWGSL imageFragmentShaderSource = {
-      .chain = {.sType = WGPUSType_ShaderSourceWGSL},
-      .code = {.data = imageFragmentShaderWGSL, .length = WGPU_STRLEN}};
-
-  WGPUShaderModuleDescriptor imageFragmentShaderDesc = {
-      .nextInChain = (const WGPUChainedStruct *)&imageFragmentShaderSource,
-      .label = {.data = "Image Fragment Shader", .length = WGPU_STRLEN}};
-  WGPUShaderModule imageFragmentShader =
-      wgpuDeviceCreateShaderModule(device, &imageFragmentShaderDesc);
-
-  // 图像渲染管线的顶点属性
-  WGPUVertexAttribute imageVertexAttributes[2] = {
-      {.format = WGPUVertexFormat_Float32x2, .offset = 0, .shaderLocation = 0},
-      {.format = WGPUVertexFormat_Float32x2,
-       .offset = sizeof(float) * 2,
-       .shaderLocation = 1}};
-
-  WGPUVertexBufferLayout imageVertexBufferLayout = {
-      .arrayStride = sizeof(float) * 4, // 2 for position, 2 for texCoord
-      .stepMode = WGPUVertexStepMode_Vertex,
-      .attributeCount = 2,
-      .attributes = imageVertexAttributes};
-
-  // 创建图像渲染绑定组布局
-  WGPUBindGroupLayoutEntry imageBindGroupLayoutEntries[2] = {
-      {.binding = 0,
-       .visibility = WGPUShaderStage_Fragment,
-       .sampler = {.type = WGPUSamplerBindingType_Filtering}},
-      {.binding = 1,
-       .visibility = WGPUShaderStage_Fragment,
-       .texture = {.sampleType = WGPUTextureSampleType_Float,
-                   .viewDimension = WGPUTextureViewDimension_2D}}};
-  WGPUBindGroupLayoutDescriptor imageBindGroupLayoutDesc = {
-      .label = {.data = "Image Bind Group Layout", .length = WGPU_STRLEN},
-      .entryCount = 2,
-      .entries = imageBindGroupLayoutEntries};
-  context->imageBindGroupLayout =
-      wgpuDeviceCreateBindGroupLayout(device, &imageBindGroupLayoutDesc);
-
-  // 创建图像渲染管线布局
-  WGPUPipelineLayoutDescriptor imagePipelineLayoutDesc = {
-      .label = {.data = "Image Pipeline Layout", .length = WGPU_STRLEN},
-      .bindGroupLayoutCount = 1,
-      .bindGroupLayouts = &context->imageBindGroupLayout};
-  context->imagePipelineLayout =
-      wgpuDeviceCreatePipelineLayout(device, &imagePipelineLayoutDesc);
-
-  // 创建图像渲染管线
-  WGPURenderPipelineDescriptor imagePipelineDesc = {
-      .label = {.data = "Image Pipeline", .length = WGPU_STRLEN},
-      .layout = context->imagePipelineLayout,
-      .vertex = {.module = imageVertexShader,
-                 .entryPoint = {.data = "vs_main", .length = WGPU_STRLEN},
-                 .bufferCount = 1,
-                 .buffers = &imageVertexBufferLayout}};
-
-  WGPUFragmentState imageFragmentState = {
-      .module = imageFragmentShader,
-      .entryPoint = {.data = "fs_main", .length = WGPU_STRLEN},
-      .targetCount = 1,
-      .targets = &colorTargetState};
-  imagePipelineDesc.fragment = &imageFragmentState;
-
-  imagePipelineDesc.primitive =
-      (WGPUPrimitiveState){.topology = WGPUPrimitiveTopology_TriangleList,
-                           .stripIndexFormat = WGPUIndexFormat_Undefined,
-                           .frontFace = WGPUFrontFace_CCW,
-                           .cullMode = WGPUCullMode_None};
-
-  imagePipelineDesc.multisample = (WGPUMultisampleState){
-      .count = 1, .mask = ~0u, .alphaToCoverageEnabled = false};
-
-  imagePipelineDesc.depthStencil = NULL;
-
-  context->imagePipeline =
-      wgpuDeviceCreateRenderPipeline(device, &imagePipelineDesc);
-
-  // 创建默认纹理 (1x1 白色像素)
-  WGPUTextureDescriptor defaultTextureDesc = {
-      .label = {.data = "Default Texture", .length = WGPU_STRLEN},
-      .size = {.width = 1, .height = 1, .depthOrArrayLayers = 1},
-      .mipLevelCount = 1,
-      .sampleCount = 1,
-      .dimension = WGPUTextureDimension_2D,
-      .format = WGPUTextureFormat_RGBA8Unorm,
-      .usage = WGPUTextureUsage_CopyDst | WGPUTextureUsage_TextureBinding};
-  context->defaultTexture =
-      wgpuDeviceCreateTexture(device, &defaultTextureDesc);
-
-  WGPUTextureViewDescriptor defaultTextureViewDesc = {
-      .format = WGPUTextureFormat_RGBA8Unorm,
-      .dimension = WGPUTextureViewDimension_2D,
-      .baseMipLevel = 0,
-      .mipLevelCount = 1,
-      .baseArrayLayer = 0,
-      .arrayLayerCount = 1};
-  context->defaultTextureView =
-      wgpuTextureCreateView(context->defaultTexture, &defaultTextureViewDesc);
-
-  // 上传白色像素数据
-  uint8_t whitePixel[4] = {255, 255, 255, 255};
-  WGPUTexelCopyBufferLayout dataLayout = {0};
-  dataLayout.offset = 0;
-  dataLayout.bytesPerRow = 4;
-  dataLayout.rowsPerImage = 1;
-
-  WGPUTexelCopyTextureInfo destination = {0};
-  destination.texture = context->defaultTexture;
-  destination.mipLevel = 0;
-  destination.origin.x = 0;
-  destination.origin.y = 0;
-  destination.origin.z = 0;
-  destination.aspect = WGPUTextureAspect_All;
-
-  wgpuQueueWriteTexture(queue, &destination, whitePixel, sizeof(whitePixel),
-                        &dataLayout, &defaultTextureDesc.size);
-
-  // 创建默认采样器
-  WGPUSamplerDescriptor samplerDesc = {
-      .label = {.data = "Default Sampler", .length = WGPU_STRLEN},
-      .addressModeU = WGPUAddressMode_Repeat,
-      .addressModeV = WGPUAddressMode_Repeat,
-      .addressModeW = WGPUAddressMode_Repeat,
-      .magFilter = WGPUFilterMode_Linear,
-      .minFilter = WGPUFilterMode_Linear,
-      .mipmapFilter = WGPUMipmapFilterMode_Linear,
-      .lodMinClamp = 0.0f,
-      .lodMaxClamp = 1.0f,
-      .compare = WGPUCompareFunction_Undefined,
-      .maxAnisotropy = 1};
-  context->defaultSampler = wgpuDeviceCreateSampler(device, &samplerDesc);
-
-  // 创建图像渲染绑定组
-  WGPUBindGroupEntry bindGroupEntries[2] = {
-      {.binding = 0, .sampler = context->defaultSampler},
-      {.binding = 1, .textureView = context->defaultTextureView}};
-  WGPUBindGroupDescriptor bindGroupDesc = {
-      .label = {.data = "Image Bind Group", .length = WGPU_STRLEN},
-      .layout = context->imageBindGroupLayout,
-      .entryCount = 2,
-      .entries = bindGroupEntries};
-  context->imageBindGroup = wgpuDeviceCreateBindGroup(device, &bindGroupDesc);
-
-  // 清理着色器模块
-  wgpuShaderModuleRelease(imageVertexShader);
-  wgpuShaderModuleRelease(imageFragmentShader);
 
   Log("Clay WebGPU渲染器初始化成功\n");
   return context;
@@ -722,49 +534,8 @@ void Clay_WebGPU_Render(Clay_WebGPU_Context *context,
     }
 
     case CLAY_RENDER_COMMAND_TYPE_IMAGE: {
-      Clay_ImageRenderData *imageData = &renderCommand->renderData.image;
-      (void)imageData; // Mark as used to suppress compiler warning
-      Clay_BoundingBox bbox = renderCommand->boundingBox;
-
-      float x1 = (bbox.x / (float)context->screenWidth) * 2.0f - 1.0f;
-      float y1 = 1.0f - (bbox.y / (float)context->screenHeight) * 2.0f;
-      float x2 =
-          ((bbox.x + bbox.width) / (float)context->screenWidth) * 2.0f - 1.0f;
-      float y2 =
-          1.0f - ((bbox.y + bbox.height) / (float)context->screenHeight) * 2.0f;
-
-      // 简单的纹理坐标
-      float u1 = 0.0f, v1 = 0.0f;
-      float u2 = 1.0f, v2 = 1.0f;
-
-      // 创建图像顶点和纹理坐标数据
-      struct {
-        float position[2];
-        float texCoord[2];
-      } vertices[6] = {
-          // 三角形1
-          {{x1, y1}, {u1, v1}}, // 左上
-          {{x2, y1}, {u2, v1}}, // 右上
-          {{x1, y2}, {u1, v2}}, // 左下
-          // 三角形2
-          {{x2, y1}, {u2, v1}}, // 右上
-          {{x2, y2}, {u2, v2}}, // 右下
-          {{x1, y2}, {u1, v2}}  // 左下
-      };
-
-      // 使用图像渲染管线
-      wgpuQueueWriteBuffer(context->queue, context->vertexBuffer, 0, vertices,
-                           sizeof(vertices));
-      wgpuRenderPassEncoderSetPipeline(renderPass, context->imagePipeline);
-      wgpuRenderPassEncoderSetVertexBuffer(renderPass, 0, context->vertexBuffer,
-                                           0, sizeof(vertices));
-      wgpuRenderPassEncoderSetBindGroup(renderPass, 0, context->imageBindGroup,
-                                        0, NULL);
-      wgpuRenderPassEncoderDraw(renderPass, 6, 1, 0, 0);
-
-      Log("渲染图像: 位置(%.1f,%.1f) 尺寸(%.1fx%.1f) "
-          "NDC(%.3f,%.3f-%.3f,%.3f)\n",
-          bbox.x, bbox.y, bbox.width, bbox.height, x1, y1, x2, y2);
+      // 图像渲染由独立的图像渲染模块处理
+      // 这里不需要处理，图像会在主渲染循环中统一处理
       break;
     }
 
@@ -928,22 +699,6 @@ void Clay_WebGPU_Cleanup(Clay_WebGPU_Context *context) {
   // 清理渲染管线
   if (context->rectanglePipeline)
     wgpuRenderPipelineRelease(context->rectanglePipeline);
-  if (context->imagePipeline)
-    wgpuRenderPipelineRelease(context->imagePipeline);
-
-  // 清理图像渲染资源
-  if (context->imageBindGroup)
-    wgpuBindGroupRelease(context->imageBindGroup);
-  if (context->imageBindGroupLayout)
-    wgpuBindGroupLayoutRelease(context->imageBindGroupLayout);
-  if (context->imagePipelineLayout)
-    wgpuPipelineLayoutRelease(context->imagePipelineLayout);
-  if (context->defaultSampler)
-    wgpuSamplerRelease(context->defaultSampler);
-  if (context->defaultTextureView)
-    wgpuTextureViewRelease(context->defaultTextureView);
-  if (context->defaultTexture)
-    wgpuTextureRelease(context->defaultTexture);
 
   free(context);
   Log("Clay WebGPU渲染器已清理\n");

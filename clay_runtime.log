@@ -1,0 +1,30 @@
+
+thread '<unnamed>' panicked at C:\Users\runneradmin\.cargo\git\checkouts\wgpu-045f9a3b3e40a5c0\f35cf94\wgpu-core\src\storage.rs:129:46:
+Adapter[Id(0,1)] does not exist
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread '<unnamed>' panicked at library\core\src\panicking.rs:218:5:
+panic in a function that cannot unwind
+stack backtrace:
+   0:     0x7ffe99e7fdb9 - <std::sys::backtrace::BacktraceLock::print::DisplayBacktrace as core::fmt::Display>::fmt::h13cebbf0a822bea5
+   1:     0x7ffe99ecd69b - core::fmt::write::h94940042d5c7da6d
+   2:     0x7ffe99e76122 - std::io::Write::write_fmt::h93705b8c9f23b90a
+   3:     0x7ffe99e7fc45 - std::sys::backtrace::BacktraceLock::print::h2b38bc5fd4b77434
+   4:     0x7ffe99e8391f - std::panicking::default_hook::{{closure}}::ha2d4ce74f3f26367
+   5:     0x7ffe99e83736 - std::panicking::default_hook::hb9221f120aee5781
+   6:     0x7ffe99e847a7 - std::panicking::rust_panic_with_hook::h7fda7456ed81e463
+   7:     0x7ffe99e844fb - std::panicking::begin_panic_handler::{{closure}}::hfebdd5474cadd278
+   8:     0x7ffe99e807bf - std::sys::backtrace::__rust_end_short_backtrace::hf838306289a81c4b
+   9:     0x7ffe99e841ae - __rustc[95feac21a9532783]::rust_begin_unwind
+  10:     0x7ffe99ec983d - core::panicking::panic_nounwind_fmt::h3f7046044fef7765
+  11:     0x7ffe99ec98d3 - core::panicking::panic_nounwind::h6903282217f1b581
+  12:     0x7ffe99ec9ad8 - core::panicking::panic_cannot_unwind::h005832ed3da0100c
+  13:     0x7ffe998076ab - wgpuSurfaceGetCapabilities
+  14:     0x7ff6d197159c - <unknown>
+  15:     0x7ff6d196ee35 - <unknown>
+  16:     0x7ff6d1892334 - <unknown>
+  17:     0x7ff6d19e684c - <unknown>
+  18:     0x7ff6d19e68ac - <unknown>
+  19:     0x7fff7127e8d7 - <unknown>
+  20:     0x7fff721928dc - <unknown>
+thread caused non-unwinding panic. aborting.

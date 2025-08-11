@@ -26,21 +26,12 @@ typedef struct {
   WGPUDevice device;
   WGPUQueue queue;
   WGPURenderPipeline rectanglePipeline;
-  WGPURenderPipeline imagePipeline;
   WGPUBuffer vertexBuffer;
   WGPUBuffer indexBuffer;
   WGPUBuffer uniformBuffer;
   WGPUTextureView targetView;
   uint32_t screenWidth;
   uint32_t screenHeight;
-
-  // 图像渲染资源
-  WGPUTexture defaultTexture;
-  WGPUTextureView defaultTextureView;
-  WGPUSampler defaultSampler;
-  WGPUBindGroup imageBindGroup;
-  WGPUBindGroupLayout imageBindGroupLayout;
-  WGPUPipelineLayout imagePipelineLayout;
 
   // 新的独立文本渲染器
   TextRenderer *textRenderer;
