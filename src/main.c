@@ -54,6 +54,7 @@ typedef struct {
   Clay_WebGPU_Context *clayRenderer;
   uint32_t windowWidth;
   uint32_t windowHeight;
+  Clay_Vector2 scrollOffset;
 } AppContext;
 
 // Clay错误处理函数
@@ -262,6 +263,8 @@ static void onSecondaryButtonClick() { Log("点击了次要按钮\n"); }
 
 static void onAccentButtonClick() { Log("点击了强调按钮\n"); }
 
+Clay_Vector2 GetChildOffset(AppContext *app) { return app->scrollOffset; }
+
 // 创建应用程序UI布局
 void CreateAppLayout(AppContext *app) {
   // Button ID 用于处理事件
@@ -271,6 +274,7 @@ void CreateAppLayout(AppContext *app) {
 
   Clay_BeginLayout();
   CLAY({.id = CLAY_ID("MainContainer"),
+        .clip = {.vertical = true, .childOffset = GetChildOffset(app)},
         .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
                    .layoutDirection = CLAY_TOP_TO_BOTTOM},
         .backgroundColor = BACKGROUND_COLOR}) {
@@ -387,6 +391,15 @@ void CreateAppLayout(AppContext *app) {
   }
 }
 
+// 滚轮回调
+void ScrollCallback(GLFWwindow *window, double xoffset, double yoffset) {
+  AppContext *app = (AppContext *)glfwGetWindowUserPointer(window);
+  app->scrollOffset.y += (float)yoffset * 20.0f;
+  if (app->scrollOffset.y > 0) {
+    app->scrollOffset.y = 0;
+  }
+}
+
 // 窗口大小改变回调
 void WindowResizeCallback(GLFWwindow *window, int width, int height) {
   AppContext *app = (AppContext *)glfwGetWindowUserPointer(window);
@@ -470,7 +483,6 @@ void RunApp(AppContext *app) {
     Clay_SetLayoutDimensions(
         (Clay_Dimensions){app->windowWidth, app->windowHeight});
     Clay_SetPointerState((Clay_Vector2){mouseX, mouseY}, mousePressed);
-    Clay_UpdateScrollContainers(true, (Clay_Vector2){0, 0}, 0.016f);
 
     CreateAppLayout(app);
     Clay_RenderCommandArray renderCommands = Clay_EndLayout();
@@ -560,6 +572,7 @@ int main() {
   // 设置窗口用户指针和回调
   glfwSetWindowUserPointer(app.window, &app);
   glfwSetWindowSizeCallback(app.window, WindowResizeCallback);
+  glfwSetScrollCallback(app.window, ScrollCallback);
 
   // 初始化WebGPU
   if (!InitializeWebGPU(&app)) {
@@ -594,10 +607,10 @@ int main() {
 #ifdef _WIN32
   printf("检测到Windows系统，检查系统字体目录...\n");
   const char *fontPaths[] = {
-    "./fonts/simhei.ttf",            // 项目目录下的黑体
-    "./fonts/msyh.ttc",              // 项目目录下的微软雅黑
-    "./fonts/simsun.ttc",            // 项目目录下的宋体
-    "./fonts/arial.ttf",             // 项目目录下的Arial
+    "./assets/fonts/simhei.ttf",     // 项目目录下的黑体
+    "./assets/fonts/msyh.ttc",       // 项目目录下的微软雅黑
+    "./assets/fonts/simsun.ttc",     // 项目目录下的宋体
+    "./assets/fonts/arial.ttf",      // 项目目录下的Arial
     "C:/Windows/Fonts/msyh.ttc",     // 系统微软雅黑
     "C:/Windows/Fonts/msyhbd.ttc",   // 系统微软雅黑粗体
     "C:/Windows/Fonts/simhei.ttf",   // 系统黑体
@@ -610,8 +623,8 @@ int main() {
 #elif defined(__APPLE__)
   printf("检测到macOS系统，检查系统字体目录...\n");
   const char *fontPaths[] = {
-    "./fonts/PingFang.ttc",       // 项目目录下的苹方
-    "./fonts/STHeiti Medium.ttc", // 项目目录下的华文黑体
+    "./assets/fonts/PingFang.ttc",       // 项目目录下的苹方
+    "./assets/fonts/STHeiti Medium.ttc", // 项目目录下的华文黑体
     "/System/Library/Fonts/Arial.ttf",
     "/System/Library/Fonts/Helvetica.ttc",
     "/System/Library/Fonts/SFNS.ttf",
@@ -621,7 +634,7 @@ int main() {
 #elif defined(__linux__)
   printf("检测到Linux系统，检查系统字体目录...\n");
   const char *fontPaths[] = {
-    "./fonts/NotoSansCJK-Regular.ttc", // 项目目录下的Noto CJK
+    "./assets/fonts/NotoSansCJK-Regular.ttc", // 项目目录下的Noto CJK
 
     // 回退到系统字体
     // 先查看是否安装思源系列

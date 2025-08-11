@@ -5,17 +5,28 @@
 #include "text_renderer.h"
 #include <webgpu/wgpu.h>
 
+// 自定义渲染回调函数类型
+typedef void (*Clay_CustomRenderCallback)(void *renderContext);
+
+// 自定义渲染上下文结构体
+typedef struct {
+  WGPURenderPassEncoder renderPass;
+  Clay_BoundingBox boundingBox;
+  void *userData;
+  uint32_t screenWidth;
+  uint32_t screenHeight;
+} Clay_CustomRenderContext;
+
 // 向后兼容的定义 - 已废弃，请使用新的TextRenderer系统
 #define CLAY_GLYPH_CACHE_SIZE 4096
 #define CLAY_FONT_ATLAS_WIDTH 1024
 #define CLAY_FONT_ATLAS_HEIGHT 1024
 
-
-
 typedef struct {
   WGPUDevice device;
   WGPUQueue queue;
   WGPURenderPipeline rectanglePipeline;
+  WGPURenderPipeline imagePipeline;
   WGPUBuffer vertexBuffer;
   WGPUBuffer indexBuffer;
   WGPUBuffer uniformBuffer;
@@ -23,9 +34,17 @@ typedef struct {
   uint32_t screenWidth;
   uint32_t screenHeight;
 
+  // 图像渲染资源
+  WGPUTexture defaultTexture;
+  WGPUTextureView defaultTextureView;
+  WGPUSampler defaultSampler;
+  WGPUBindGroup imageBindGroup;
+  WGPUBindGroupLayout imageBindGroupLayout;
+  WGPUPipelineLayout imagePipelineLayout;
+
   // 新的独立文本渲染器
   TextRenderer *textRenderer;
-  
+
   // 默认字体ID
   int defaultFontId;
 } Clay_WebGPU_Context;
@@ -46,8 +65,10 @@ bool Clay_WebGPU_LoadFont(Clay_WebGPU_Context *context, const char *fontPath,
 bool Clay_WebGPU_SetDefaultFont(Clay_WebGPU_Context *context, int fontId);
 
 // 文本渲染函数 (使用新的文本渲染器)
-void Clay_WebGPU_RenderText(Clay_WebGPU_Context *context, WGPURenderPassEncoder renderPass,
-                           Clay_TextRenderData *textData, Clay_BoundingBox bbox);
+void Clay_WebGPU_RenderText(Clay_WebGPU_Context *context,
+                            WGPURenderPassEncoder renderPass,
+                            Clay_TextRenderData *textData,
+                            Clay_BoundingBox bbox);
 
 // 调试函数
 void Clay_WebGPU_PrintTextStats(Clay_WebGPU_Context *context);
