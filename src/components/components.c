@@ -3,6 +3,7 @@
 #pragma once
 #define CLAY_IMPLEMENTATION
 #include "components.h"
+#include "../DEV.h"
 
 // 定义颜色常量
 const Clay_Color PRIMARY_COLOR = {70, 130, 180, 255};     // Steel Blue
@@ -96,14 +97,80 @@ void ButtonComponent(ButtonData *data) {
   }
 }
 
+// 全局变量控制侧边栏状态
+static bool sidebarVisible = false;
+static float sidebarOffset = -300.0f; // 动画偏移值
+
+void ToggleSidebar() { sidebarVisible = !sidebarVisible; }
+
 void HeaderComponent(Clay_String title) {
   CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(80)},
                    .padding = {20, 20, 0, 0},
-                   .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}},
+                   .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER},
+                   .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                   .childGap = 20},
         .backgroundColor = PRIMARY_COLOR}) {
+
+    // 菜单按钮
+    ButtonData menuButton = {.text = CLAY_STRING("☰"),
+                             .backgroundColor = ACCENT_COLOR,
+                             .buttonId = CLAY_ID("MenuButton"),
+                             .on_click = ToggleSidebar};
+    ButtonComponent(&menuButton);
+
+    // 标题文本
     CLAY_TEXT(title, CLAY_TEXT_CONFIG({.fontId = 0,
                                        .fontSize = 28,
                                        .textColor = {255, 255, 255, 255}}));
+  }
+}
+
+static float previousTime = 0.0f;
+float deltaTime = 0.0f;
+
+float GetDeltaTime() {
+  float currentTime = GetCurrentTimeInSeconds();
+  deltaTime = currentTime - previousTime;
+  previousTime = currentTime;
+  return deltaTime;
+}
+
+void AnimatedSidebar() {
+  // 动画插值 - 在渲染循环中更新
+  float targetOffset = sidebarVisible ? 0.0f : -300.0f;
+  float animationSpeed = 8.0f; // 调整动画速度
+  float deltaTime = GetDeltaTime();
+  sidebarOffset += (targetOffset - sidebarOffset) * animationSpeed * deltaTime;
+
+  CLAY({.id = CLAY_ID("AnimatedSidebar"),
+        .floating = {.attachTo = CLAY_ATTACH_TO_ROOT,
+                     .offset = {.x = sidebarOffset, .y = 80}, // y=80 避开header
+                     .zIndex = 100},
+        .layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM,
+                   .sizing = {.width = CLAY_SIZING_FIXED(300),
+                              .height = CLAY_SIZING_GROW(0)},
+                   .padding = CLAY_PADDING_ALL(16),
+                   .childGap = 16},
+        .backgroundColor = {
+          255, 255, 255, 255
+        },
+        .border = {.color = {200, 200, 200, 255}, .width = {0, 1, 1, 0}}}) {
+    // 侧边栏内容
+    CLAY_TEXT(CLAY_STRING("侧边栏菜单"),
+              CLAY_TEXT_CONFIG(
+                  {.fontId = 0, .fontSize = 18, .textColor = PRIMARY_COLOR}));
+
+    // 添加菜单项
+    for (int i = 0; i < 5; i++) {
+      CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(40)},
+                       .padding = CLAY_PADDING_ALL(10)},
+            .backgroundColor = BACKGROUND_COLOR,
+            .cornerRadius = CLAY_CORNER_RADIUS(5)}) {
+        CLAY_TEXT(Clay__IntToString(i + 1),
+                  CLAY_TEXT_CONFIG(
+                      {.fontId = 0, .fontSize = 14, .textColor = TEXT_COLOR}));
+      }
+    }
   }
 }
 

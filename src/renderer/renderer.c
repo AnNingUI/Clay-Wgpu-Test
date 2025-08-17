@@ -67,8 +67,6 @@ static const char *fragmentShaderWGSL =
     "    return vec4<f32>(input.color.rgb, input.color.a * alpha);\n"
     "}\n";
 
-
-
 Clay_WebGPU_Context *Clay_WebGPU_Initialize(WGPUDevice device, WGPUQueue queue,
                                             WGPUTextureView targetView,
                                             uint32_t screenWidth,
@@ -433,16 +431,21 @@ void Clay_WebGPU_Render(Clay_WebGPU_Context *context,
                            (float)context->screenHeight) *
                               2.0f;
 
-        float vertices[] = {x1, y1, r, g, b, a, x2, y1, r, g, b, a,
-                            x1, y2, r, g, b, a, x2, y1, r, g, b, a,
-                            x2, y2, r, g, b, a, x1, y2, r, g, b, a};
+        float vertices[] = {
+            x1, y1, r, g, b, a, 0, 0, bbox.width, bbox.height, 0, 0, 0, 0,
+            x2, y1, r, g, b, a, 1, 0, bbox.width, bbox.height, 0, 0, 0, 0,
+            x1, y2, r, g, b, a, 0, 1, bbox.width, bbox.height, 0, 0, 0, 0,
+            x2, y1, r, g, b, a, 1, 0, bbox.width, bbox.height, 0, 0, 0, 0,
+            x2, y2, r, g, b, a, 1, 1, bbox.width, bbox.height, 0, 0, 0, 0,
+            x1, y2, r, g, b, a, 0, 1, bbox.width, bbox.height, 0, 0, 0, 0};
 
+        size_t verticesSize = sizeof(vertices);
         wgpuQueueWriteBuffer(context->queue, context->vertexBuffer, 0, vertices,
-                             sizeof(vertices));
+                             verticesSize);
         wgpuRenderPassEncoderSetPipeline(renderPass,
                                          context->rectanglePipeline);
         wgpuRenderPassEncoderSetVertexBuffer(
-            renderPass, 0, context->vertexBuffer, 0, sizeof(vertices));
+            renderPass, 0, context->vertexBuffer, 0, verticesSize);
         wgpuRenderPassEncoderDraw(renderPass, 6, 1, 0, 0);
       }
 
@@ -458,16 +461,21 @@ void Clay_WebGPU_Render(Clay_WebGPU_Context *context,
             1.0f -
             ((bbox.y + bbox.height) / (float)context->screenHeight) * 2.0f;
 
-        float vertices[] = {x1, y1, r, g, b, a, x2, y1, r, g, b, a,
-                            x1, y2, r, g, b, a, x2, y1, r, g, b, a,
-                            x2, y2, r, g, b, a, x1, y2, r, g, b, a};
+        float vertices[] = {
+            x1, y1, r, g, b, a, 0, 0, bbox.width, bbox.height, 0, 0, 0, 0,
+            x2, y1, r, g, b, a, 1, 0, bbox.width, bbox.height, 0, 0, 0, 0,
+            x1, y2, r, g, b, a, 0, 1, bbox.width, bbox.height, 0, 0, 0, 0,
+            x2, y1, r, g, b, a, 1, 0, bbox.width, bbox.height, 0, 0, 0, 0,
+            x2, y2, r, g, b, a, 1, 1, bbox.width, bbox.height, 0, 0, 0, 0,
+            x1, y2, r, g, b, a, 0, 1, bbox.width, bbox.height, 0, 0, 0, 0};
 
+        size_t verticesSize = sizeof(vertices);
         wgpuQueueWriteBuffer(context->queue, context->vertexBuffer, 0, vertices,
-                             sizeof(vertices));
+                             verticesSize);
         wgpuRenderPassEncoderSetPipeline(renderPass,
                                          context->rectanglePipeline);
         wgpuRenderPassEncoderSetVertexBuffer(
-            renderPass, 0, context->vertexBuffer, 0, sizeof(vertices));
+            renderPass, 0, context->vertexBuffer, 0, verticesSize);
         wgpuRenderPassEncoderDraw(renderPass, 6, 1, 0, 0);
       }
 
@@ -483,16 +491,21 @@ void Clay_WebGPU_Render(Clay_WebGPU_Context *context,
             1.0f -
             ((bbox.y + bbox.height) / (float)context->screenHeight) * 2.0f;
 
-        float vertices[] = {x1, y1, r, g, b, a, x2, y1, r, g, b, a,
-                            x1, y2, r, g, b, a, x2, y1, r, g, b, a,
-                            x2, y2, r, g, b, a, x1, y2, r, g, b, a};
+        float vertices[] = {
+            x1, y1, r, g, b, a, 0, 0, bbox.width, bbox.height, 0, 0, 0, 0,
+            x2, y1, r, g, b, a, 1, 0, bbox.width, bbox.height, 0, 0, 0, 0,
+            x1, y2, r, g, b, a, 0, 1, bbox.width, bbox.height, 0, 0, 0, 0,
+            x2, y1, r, g, b, a, 1, 0, bbox.width, bbox.height, 0, 0, 0, 0,
+            x2, y2, r, g, b, a, 1, 1, bbox.width, bbox.height, 0, 0, 0, 0,
+            x1, y2, r, g, b, a, 0, 1, bbox.width, bbox.height, 0, 0, 0, 0};
 
+        size_t verticesSize = sizeof(vertices);
         wgpuQueueWriteBuffer(context->queue, context->vertexBuffer, 0, vertices,
-                             sizeof(vertices));
+                             verticesSize);
         wgpuRenderPassEncoderSetPipeline(renderPass,
                                          context->rectanglePipeline);
         wgpuRenderPassEncoderSetVertexBuffer(
-            renderPass, 0, context->vertexBuffer, 0, sizeof(vertices));
+            renderPass, 0, context->vertexBuffer, 0, verticesSize);
         wgpuRenderPassEncoderDraw(renderPass, 6, 1, 0, 0);
       }
 
@@ -509,16 +522,21 @@ void Clay_WebGPU_Render(Clay_WebGPU_Context *context,
             1.0f -
             ((bbox.y + bbox.height) / (float)context->screenHeight) * 2.0f;
 
-        float vertices[] = {x1, y1, r, g, b, a, x2, y1, r, g, b, a,
-                            x1, y2, r, g, b, a, x2, y1, r, g, b, a,
-                            x2, y2, r, g, b, a, x1, y2, r, g, b, a};
+        float vertices[] = {
+            x1, y1, r, g, b, a, 0, 0, bbox.width, bbox.height, 0, 0, 0, 0,
+            x2, y1, r, g, b, a, 1, 0, bbox.width, bbox.height, 0, 0, 0, 0,
+            x1, y2, r, g, b, a, 0, 1, bbox.width, bbox.height, 0, 0, 0, 0,
+            x2, y1, r, g, b, a, 1, 0, bbox.width, bbox.height, 0, 0, 0, 0,
+            x2, y2, r, g, b, a, 1, 1, bbox.width, bbox.height, 0, 0, 0, 0,
+            x1, y2, r, g, b, a, 0, 1, bbox.width, bbox.height, 0, 0, 0, 0};
 
+        size_t verticesSize = sizeof(vertices);
         wgpuQueueWriteBuffer(context->queue, context->vertexBuffer, 0, vertices,
-                             sizeof(vertices));
+                             verticesSize);
         wgpuRenderPassEncoderSetPipeline(renderPass,
                                          context->rectanglePipeline);
         wgpuRenderPassEncoderSetVertexBuffer(
-            renderPass, 0, context->vertexBuffer, 0, sizeof(vertices));
+            renderPass, 0, context->vertexBuffer, 0, verticesSize);
         wgpuRenderPassEncoderDraw(renderPass, 6, 1, 0, 0);
       }
       break;
@@ -608,16 +626,21 @@ void Clay_WebGPU_Render(Clay_WebGPU_Context *context,
         // 使用紫色作为占位符颜色
         float r = 0.6f, g = 0.4f, b = 0.8f, a = 0.7f;
 
-        float vertices[] = {x1, y1, r, g, b, a, x2, y1, r, g, b, a,
-                            x1, y2, r, g, b, a, x2, y1, r, g, b, a,
-                            x2, y2, r, g, b, a, x1, y2, r, g, b, a};
+        float vertices[] = {
+            x1, y1, r, g, b, a, 0, 0, bbox.width, bbox.height, 0, 0, 0, 0,
+            x2, y1, r, g, b, a, 1, 0, bbox.width, bbox.height, 0, 0, 0, 0,
+            x1, y2, r, g, b, a, 0, 1, bbox.width, bbox.height, 0, 0, 0, 0,
+            x2, y1, r, g, b, a, 1, 0, bbox.width, bbox.height, 0, 0, 0, 0,
+            x2, y2, r, g, b, a, 1, 1, bbox.width, bbox.height, 0, 0, 0, 0,
+            x1, y2, r, g, b, a, 0, 1, bbox.width, bbox.height, 0, 0, 0, 0};
 
+        size_t verticesSize = sizeof(vertices);
         wgpuQueueWriteBuffer(context->queue, context->vertexBuffer, 0, vertices,
-                             sizeof(vertices));
+                             verticesSize);
         wgpuRenderPassEncoderSetPipeline(renderPass,
                                          context->rectanglePipeline);
         wgpuRenderPassEncoderSetVertexBuffer(
-            renderPass, 0, context->vertexBuffer, 0, sizeof(vertices));
+            renderPass, 0, context->vertexBuffer, 0, verticesSize);
         wgpuRenderPassEncoderDraw(renderPass, 6, 1, 0, 0);
 
         Log("渲染自定义占位符: 位置(%.1f,%.1f) 尺寸(%.1fx%.1f)\n", bbox.x,

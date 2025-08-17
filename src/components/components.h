@@ -26,5 +26,6 @@ void CardComponent(Clay_String title, Clay_String content);
 void ButtonComponent(ButtonData *data);
 void HeaderComponent(Clay_String title);
 void ResponsiveCardGrid();
+void AnimatedSidebar();
 
 #endif
