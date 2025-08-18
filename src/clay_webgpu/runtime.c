@@ -260,10 +260,23 @@ void Runtime_Run(RuntimeContext* ctx) {
           .clearValue = {0.0f, 0.0f, 0.0f, 0.0f},
           .loadOp = WGPULoadOp_Load,
           .storeOp = WGPUStoreOp_Store};
+      WGPURenderPassDepthStencilAttachment depthStencilAttachment = {
+          .view = ctx->clayRenderer->depthTextureView,
+          .depthClearValue = 0.0f,  // 修改为0.0f以匹配深度测试
+          .depthLoadOp = WGPULoadOp_Load,
+          .depthStoreOp = WGPUStoreOp_Store,
+          .depthReadOnly = false,
+          .stencilLoadOp = WGPULoadOp_Undefined,
+          .stencilStoreOp = WGPUStoreOp_Undefined,
+          .stencilClearValue = 0,
+          .stencilReadOnly = true
+      };
+      
       WGPURenderPassDescriptor renderPassDesc = {
           .label = {.data = "Image Render Pass", .length = WGPU_STRLEN},
           .colorAttachmentCount = 1,
-          .colorAttachments = &colorAttachment};
+          .colorAttachments = &colorAttachment,
+          .depthStencilAttachment = &depthStencilAttachment};
       WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
       image_renderer_process_clay_commands(ctx->imageRenderer, renderPass, renderCommands, ctx->windowWidth, ctx->windowHeight);
       wgpuRenderPassEncoderEnd(renderPass);

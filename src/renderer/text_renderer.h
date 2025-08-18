@@ -151,15 +151,16 @@ float text_renderer_get_line_height(TextRenderer *renderer, int font_id);
 void text_renderer_begin_frame(TextRenderer *renderer);
 void text_renderer_render_string(TextRenderer *renderer, WGPURenderPassEncoder render_pass,
                                 const char *text, int text_length,
-                                float x, float y, Clay_Color color, int font_id);
+                                float x, float y, Clay_Color color, int font_id, float z_index);
 void text_renderer_render_clay_text(TextRenderer *renderer, WGPURenderPassEncoder render_pass,
-                                   Clay_TextRenderData *text_data, Clay_BoundingBox bbox);
+                                    Clay_TextRenderData *text_data,
+                                    Clay_BoundingBox bbox, float z_index);
 void text_renderer_end_frame(TextRenderer *renderer);
 
 // 批量渲染内部函数
 void text_renderer_flush_batch(TextRenderer *renderer, WGPURenderPassEncoder render_pass);
 void text_renderer_add_char_to_batch(TextRenderer *renderer, uint32_t codepoint, 
-                                    float x, float y, int font_id, Clay_Color color);
+                                    float x, float y, int font_id, Clay_Color color, float z_index);
 
 // 调试和统计
 void text_renderer_print_stats(TextRenderer *renderer);

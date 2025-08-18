@@ -64,13 +64,13 @@ void AppLayout(void *userData) {
   Clay_ElementId secondaryButtonId = CLAY_ID("SecondaryButton");
   Clay_ElementId accentButtonId = CLAY_ID("AccentButton");
   Clay_BeginLayout();
-  AnimatedSidebar();
   CLAY({.id = CLAY_ID("MainContainer"),
         .clip = {.vertical = true, .childOffset = GetChildOffset(ctx)},
         .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
                    .layoutDirection = CLAY_TOP_TO_BOTTOM},
         .backgroundColor = BACKGROUND_COLOR}) {
     HeaderComponent(CLAY_STRING("Clay 响应式 UI 示例"));
+    AnimatedSidebar();
 
     CLAY_TEXT(CLAY_STRING("Test UI"),
               CLAY_TEXT_CONFIG(

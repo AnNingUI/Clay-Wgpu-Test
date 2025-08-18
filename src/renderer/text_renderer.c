@@ -14,6 +14,7 @@ static const char *text_vertex_shader_wgsl =
     "    @location(0) position: vec2<f32>,\n"
     "    @location(1) texCoords: vec2<f32>,\n"
     "    @location(2) color: vec4<f32>,\n"
+    "    @location(3) z_index: f32,\n"
     "}\n"
     "\n"
     "struct VertexOutput {\n"
@@ -25,7 +26,7 @@ static const char *text_vertex_shader_wgsl =
     "@vertex\n"
     "fn vs_main(input: VertexInput) -> VertexOutput {\n"
     "    var output: VertexOutput;\n"
-    "    output.position = vec4<f32>(input.position, 0.0, 1.0);\n"
+    "    output.position = vec4<f32>(input.position, input.z_index, 1.0);\n"
     "    output.texCoords = input.texCoords;\n"
     "    output.color = input.color;\n"
     "    return output;\n"
@@ -237,20 +238,26 @@ static bool create_text_pipeline(TextRenderer *renderer) {
       wgpuDeviceCreatePipelineLayout(renderer->device, &pipeline_layout_desc);
 
   // 顶点属性（包含颜色）
-  WGPUVertexAttribute vertex_attributes[] = {
-      {.format = WGPUVertexFormat_Float32x2, .offset = 0, .shaderLocation = 0},
+  WGPUVertexAttribute vertexAttributes[4] = {
+      {.format = WGPUVertexFormat_Float32x2,
+       .offset = 0,
+       .shaderLocation = 0}, // position
       {.format = WGPUVertexFormat_Float32x2,
        .offset = sizeof(float) * 2,
-       .shaderLocation = 1},
+       .shaderLocation = 1}, // texCoord
       {.format = WGPUVertexFormat_Float32x4,
        .offset = sizeof(float) * 4,
-       .shaderLocation = 2}};
+       .shaderLocation = 2}, // color
+      {.format = WGPUVertexFormat_Float32,
+       .offset = sizeof(float) * 8,
+       .shaderLocation = 3} // z_index
+  };
 
-  WGPUVertexBufferLayout vertex_buffer_layout = {
-      .arrayStride = sizeof(float) * 8,
+  WGPUVertexBufferLayout vertexBufferLayout = {
+      .arrayStride = sizeof(float) * 9, // 2+2+4+1 = 9 floats per vertex
       .stepMode = WGPUVertexStepMode_Vertex,
-      .attributeCount = 3,
-      .attributes = vertex_attributes};
+      .attributeCount = 4,
+      .attributes = vertexAttributes};
 
   // 混合状态
   WGPUBlendState blend_state = {
@@ -267,13 +274,26 @@ static bool create_text_pipeline(TextRenderer *renderer) {
       .writeMask = WGPUColorWriteMask_All};
 
   // 创建渲染管线
+  // 深度模板状态
+  WGPUDepthStencilState depthStencilState = {
+      .format = WGPUTextureFormat_Depth24Plus,
+      .depthWriteEnabled = true,
+      .depthCompare = WGPUCompareFunction_LessEqual,
+      .stencilFront = {0},
+      .stencilBack = {0},
+      .stencilReadMask = 0,
+      .stencilWriteMask = 0,
+      .depthBias = 0,
+      .depthBiasSlopeScale = 0.0,
+      .depthBiasClamp = 0.0};
+
   WGPURenderPipelineDescriptor pipeline_desc = {
       .label = {.data = "Text Render Pipeline", .length = WGPU_STRLEN},
       .layout = pipeline_layout,
       .vertex = {.module = vertex_shader,
                  .entryPoint = {.data = "vs_main", .length = WGPU_STRLEN},
                  .bufferCount = 1,
-                 .buffers = &vertex_buffer_layout},
+                 .buffers = &vertexBufferLayout},
       .fragment = &(WGPUFragmentState){.module = fragment_shader,
                                        .entryPoint = {.data = "fs_main",
                                                       .length = WGPU_STRLEN},
@@ -283,6 +303,7 @@ static bool create_text_pipeline(TextRenderer *renderer) {
                     .stripIndexFormat = WGPUIndexFormat_Undefined,
                     .frontFace = WGPUFrontFace_CCW,
                     .cullMode = WGPUCullMode_None},
+      .depthStencil = &depthStencilState,
       .multisample = {
           .count = 1, .mask = ~0u, .alphaToCoverageEnabled = false}};
 
@@ -299,25 +320,25 @@ static bool create_text_pipeline(TextRenderer *renderer) {
 
 // 创建缓冲区
 static bool create_buffers(TextRenderer *renderer) {
-  // 顶点缓冲区（更新大小以包含颜色数据）
-  renderer->vertex_buffer = wgpuDeviceCreateBuffer(
-      renderer->device,
-      &(WGPUBufferDescriptor){
-          .label = {.data = "Text Vertex Buffer", .length = WGPU_STRLEN},
-          .usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst,
-          .size = TEXT_MAX_CHARS_PER_BATCH * 4 * 8 * sizeof(float),
-          .mappedAtCreation = false});
+  // 为了与矩形渲染路径保持一致，使用显式描述符并统一为 32 位索引格式
+  WGPUBufferDescriptor vertex_buffer_desc = {
+      .label = {.data = "Text Vertex Buffer", .length = WGPU_STRLEN},
+      .usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst,
+      .size = TEXT_MAX_CHARS_PER_BATCH * 6 * 9 * sizeof(float),
+      .mappedAtCreation = false};
+  renderer->vertex_buffer =
+      wgpuDeviceCreateBuffer(renderer->device, &vertex_buffer_desc);
 
-  // 索引缓冲区
-  renderer->index_buffer = wgpuDeviceCreateBuffer(
-      renderer->device,
-      &(WGPUBufferDescriptor){
-          .label = {.data = "Text Index Buffer", .length = WGPU_STRLEN},
-          .usage = WGPUBufferUsage_Index | WGPUBufferUsage_CopyDst,
-          .size = TEXT_MAX_CHARS_PER_BATCH * 6 * sizeof(uint16_t),
-          .mappedAtCreation = false});
+  // 索引缓冲区（目前未直接使用，但为保持接口兼容仍创建）
+  WGPUBufferDescriptor index_buffer_desc = {
+      .label = {.data = "Text Index Buffer", .length = WGPU_STRLEN},
+      .usage = WGPUBufferUsage_Index | WGPUBufferUsage_CopyDst,
+      .size = TEXT_MAX_CHARS_PER_BATCH * 6 * sizeof(uint32_t),
+      .mappedAtCreation = false};
+  renderer->index_buffer =
+      wgpuDeviceCreateBuffer(renderer->device, &index_buffer_desc);
 
-  return renderer->vertex_buffer && renderer->index_buffer;
+  return renderer->vertex_buffer != NULL && renderer->index_buffer != NULL;
 }
 
 // 创建纹理图集
@@ -420,8 +441,8 @@ TextRenderer *text_renderer_create(WGPUDevice device, WGPUQueue queue,
   renderer->default_font_id = -1;
 
   // 分配批次缓冲区
-  renderer->current_batch.vertex_data =
-      malloc(TEXT_MAX_CHARS_PER_BATCH * 4 * 8 * sizeof(float));
+  renderer->current_batch.vertex_data = malloc(
+      TEXT_MAX_CHARS_PER_BATCH * 4 * 9 * sizeof(float)); // 9 floats per vertex
   renderer->current_batch.index_data =
       malloc(TEXT_MAX_CHARS_PER_BATCH * 6 * sizeof(uint16_t));
 
@@ -840,14 +861,9 @@ void text_renderer_flush_batch(TextRenderer *renderer,
 
   // 上传顶点和索引数据
   size_t vertex_data_size =
-      renderer->current_batch.vertex_count * 8 * sizeof(float);
-  size_t index_data_size =
-      renderer->current_batch.index_count * sizeof(uint16_t);
-
+      renderer->current_batch.vertex_count * 9 * sizeof(float);
   wgpuQueueWriteBuffer(renderer->queue, renderer->vertex_buffer, 0,
                        renderer->current_batch.vertex_data, vertex_data_size);
-  wgpuQueueWriteBuffer(renderer->queue, renderer->index_buffer, 0,
-                       renderer->current_batch.index_data, index_data_size);
 
   // 设置渲染状态
   wgpuRenderPassEncoderSetPipeline(render_pass, renderer->text_pipeline);
@@ -857,13 +873,9 @@ void text_renderer_flush_batch(TextRenderer *renderer,
   // 设置缓冲区
   wgpuRenderPassEncoderSetVertexBuffer(render_pass, 0, renderer->vertex_buffer,
                                        0, vertex_data_size);
-  wgpuRenderPassEncoderSetIndexBuffer(render_pass, renderer->index_buffer,
-                                      WGPUIndexFormat_Uint16, 0,
-                                      index_data_size);
 
-  // 绘制
-  wgpuRenderPassEncoderDrawIndexed(
-      render_pass, renderer->current_batch.index_count, 1, 0, 0, 0);
+  // 直接按顶点绘制，无需索引
+  wgpuRenderPassEncoderDraw(render_pass, renderer->current_batch.vertex_count, 1, 0, 0);
 
   // 重置批次
   renderer->current_batch.vertex_count = 0;
@@ -873,7 +885,7 @@ void text_renderer_flush_batch(TextRenderer *renderer,
 
 void text_renderer_add_char_to_batch(TextRenderer *renderer, uint32_t codepoint,
                                      float x, float y, int font_id,
-                                     Clay_Color color) {
+                                     Clay_Color color, float z_index) {
   if (!renderer)
     return;
 
@@ -918,7 +930,11 @@ void text_renderer_add_char_to_batch(TextRenderer *renderer, uint32_t codepoint,
 
   // 添加顶点数据（包含颜色）
   int base_vertex = renderer->current_batch.vertex_count;
-  float *vertices = renderer->current_batch.vertex_data + base_vertex * 8;
+  float *vertices = renderer->current_batch.vertex_data +
+                    base_vertex * 9; // 9 floats per vertex
+
+  // 使用传入的z_index值作为深度值
+  float normalized_z = z_index;
 
   // 左上
   vertices[0] = ndc_x1;
@@ -929,7 +945,8 @@ void text_renderer_add_char_to_batch(TextRenderer *renderer, uint32_t codepoint,
   vertices[5] = color.g / 255.0f;
   vertices[6] = color.b / 255.0f;
   vertices[7] = color.a / 255.0f;
-  vertices += 8;
+  vertices[8] = normalized_z;
+  vertices += 9;
   // 右上
   vertices[0] = ndc_x2;
   vertices[1] = ndc_y1;
@@ -939,7 +956,8 @@ void text_renderer_add_char_to_batch(TextRenderer *renderer, uint32_t codepoint,
   vertices[5] = color.g / 255.0f;
   vertices[6] = color.b / 255.0f;
   vertices[7] = color.a / 255.0f;
-  vertices += 8;
+  vertices[8] = normalized_z;
+  vertices += 9;
   // 左下
   vertices[0] = ndc_x1;
   vertices[1] = ndc_y2;
@@ -949,7 +967,19 @@ void text_renderer_add_char_to_batch(TextRenderer *renderer, uint32_t codepoint,
   vertices[5] = color.g / 255.0f;
   vertices[6] = color.b / 255.0f;
   vertices[7] = color.a / 255.0f;
-  vertices += 8;
+  vertices[8] = normalized_z;
+  vertices += 9;
+  // 右上 (重复)
+  vertices[0] = ndc_x2;
+  vertices[1] = ndc_y1;
+  vertices[2] = glyph->u1;
+  vertices[3] = glyph->v0;
+  vertices[4] = color.r / 255.0f;
+  vertices[5] = color.g / 255.0f;
+  vertices[6] = color.b / 255.0f;
+  vertices[7] = color.a / 255.0f;
+  vertices[8] = normalized_z;
+  vertices += 9;
   // 右下
   vertices[0] = ndc_x2;
   vertices[1] = ndc_y2;
@@ -959,20 +989,20 @@ void text_renderer_add_char_to_batch(TextRenderer *renderer, uint32_t codepoint,
   vertices[5] = color.g / 255.0f;
   vertices[6] = color.b / 255.0f;
   vertices[7] = color.a / 255.0f;
+  vertices[8] = normalized_z;
+  vertices += 9;
+  // 左下 (重复)
+  vertices[0] = ndc_x1;
+  vertices[1] = ndc_y2;
+  vertices[2] = glyph->u0;
+  vertices[3] = glyph->v1;
+  vertices[4] = color.r / 255.0f;
+  vertices[5] = color.g / 255.0f;
+  vertices[6] = color.b / 255.0f;
+  vertices[7] = color.a / 255.0f;
+  vertices[8] = normalized_z;
 
-  // 添加索引数据
-  int base_index = renderer->current_batch.index_count;
-  uint16_t *indices = renderer->current_batch.index_data + base_index;
-
-  uint16_t vertex_offset = renderer->current_batch.vertex_count;
-  indices[0] = vertex_offset + 0; // 左上
-  indices[1] = vertex_offset + 1; // 右上
-  indices[2] = vertex_offset + 2; // 左下
-  indices[3] = vertex_offset + 1; // 右上
-  indices[4] = vertex_offset + 3; // 右下
-  indices[5] = vertex_offset + 2; // 左下
-
-  renderer->current_batch.vertex_count += 4;
+  renderer->current_batch.vertex_count += 6; // 6 vertices per character
   renderer->current_batch.index_count += 6;
   renderer->current_batch.char_count++;
 
@@ -986,7 +1016,7 @@ void text_renderer_add_char_to_batch(TextRenderer *renderer, uint32_t codepoint,
 void text_renderer_render_string(TextRenderer *renderer,
                                  WGPURenderPassEncoder render_pass,
                                  const char *text, int text_length, float x,
-                                 float y, Clay_Color color, int font_id) {
+                                 float y, Clay_Color color, int font_id, float z_index) {
   if (!renderer || !text)
     return;
 
@@ -1036,7 +1066,7 @@ void text_renderer_render_string(TextRenderer *renderer,
         text_renderer_get_glyph(renderer, result.codepoint, font_id);
     if (glyph) {
       text_renderer_add_char_to_batch(renderer, result.codepoint, cursor_x,
-                                      cursor_y, font_id, color);
+                                      cursor_y, font_id, color, z_index);
       cursor_x += glyph->advance;
     }
   }
@@ -1045,7 +1075,7 @@ void text_renderer_render_string(TextRenderer *renderer,
 void text_renderer_render_clay_text(TextRenderer *renderer,
                                     WGPURenderPassEncoder render_pass,
                                     Clay_TextRenderData *text_data,
-                                    Clay_BoundingBox bbox) {
+                                    Clay_BoundingBox bbox, float z_index) {
   if (!renderer || !text_data)
     return;
 
@@ -1063,17 +1093,14 @@ void text_renderer_render_clay_text(TextRenderer *renderer,
   // 使用字体基线作为参考，字形会自然对齐到基线
   float baseline_y = bbox.y + bbox.height - (bbox.height - font_height) / 2.0f;
 
-  //   Log("渲染Clay文本: \"%.*s\" 在位置 (%.1f, %.1f), 字体大小 %d, 基线
-  //   %.1f\n",
-  //          (int)text_data->stringContents.length,
-  //          text_data->stringContents.chars, bbox.x, baseline_y,
-  //          text_data->fontSize);
+  // 将z_index规范化为-1到1之间的值
+  float normalized_z = z_index;
 
   // 累积文本到批次，不立即渲染 - 传递NULL作为render_pass
   text_renderer_render_string(renderer, NULL, text_data->stringContents.chars,
                               text_data->stringContents.length, bbox.x,
                               baseline_y, text_data->textColor,
-                              renderer->default_font_id);
+                              renderer->default_font_id, normalized_z);
 }
 
 void text_renderer_end_frame(TextRenderer *renderer) {

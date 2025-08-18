@@ -33,6 +33,10 @@ typedef struct {
   uint32_t screenWidth;
   uint32_t screenHeight;
 
+// 深度纹理相关
+  WGPUTexture depthTexture;
+  WGPUTextureView depthTextureView;
+
   // 新的独立文本渲染器
   TextRenderer *textRenderer;
 
@@ -59,7 +63,7 @@ bool Clay_WebGPU_SetDefaultFont(Clay_WebGPU_Context *context, int fontId);
 void Clay_WebGPU_RenderText(Clay_WebGPU_Context *context,
                             WGPURenderPassEncoder renderPass,
                             Clay_TextRenderData *textData,
-                            Clay_BoundingBox bbox);
+                            Clay_BoundingBox bbox, float z_index);
 
 // 调试函数
 void Clay_WebGPU_PrintTextStats(Clay_WebGPU_Context *context);
