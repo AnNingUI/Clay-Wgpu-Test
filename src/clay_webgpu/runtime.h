@@ -2,8 +2,7 @@
 #define CLAY_WEBGPU_RUNTIME_H
 
 #include <webgpu/webgpu.h>
-#include "../renderer/renderer.h"
-#include "../renderer/image_renderer.h"
+#include "../renderer/unified_adapter.h"
 #include "clay.h"
 #include <GLFW/glfw3.h>
 
@@ -14,11 +13,10 @@ typedef struct {
   WGPUQueue queue;
   WGPUSurface surface;
   WGPUSurfaceConfiguration surfaceConfig;
-  Clay_WebGPU_Context *clayRenderer;
+  UnifiedAdapter *clayRenderer;
   uint32_t windowWidth;
   uint32_t windowHeight;
   Clay_Vector2 scrollOffset;
-  ImageRenderer *imageRenderer;
   void (*layoutFunc)(void* userData);
   void* userData;
 } RuntimeContext;

@@ -29,28 +29,49 @@ void HandleClayErrors(Clay_ErrorData errorData) {
 Clay_Dimensions MeasureText(Clay_StringSlice text,
                             Clay_TextElementConfig *config, void *userData) {
   RuntimeContext *ctx = (RuntimeContext *)userData;
-  if (!ctx || !ctx->clayRenderer || !ctx->clayRenderer->textRenderer) {
+  if (!ctx || !ctx->clayRenderer) {
     return (Clay_Dimensions){.width = text.length * config->fontSize * 0.6f,
                              .height = config->fontSize};
   }
-  float width = text_renderer_measure_string_width(
-      ctx->clayRenderer->textRenderer, text.chars, config->fontId, text.length);
-  float height = text_renderer_get_line_height(ctx->clayRenderer->textRenderer,
-                                               config->fontId);
-  return (Clay_Dimensions){.width = width, .height = height};
+  return unified_adapter_measure_clay_text(text, config, ctx->clayRenderer);
 }
 
-WebGPUImage *load_image(ImageRenderer *renderer, const char *imagePath) {
-  WebGPUImage *image = image_renderer_create_texture(renderer, imagePath);
-  if (!image) {
+// 图片数据结构和管理
+typedef struct {
+  int textureIndex;  // 在统一渲染器中的纹理索引
+  int width;
+  int height;
+} UnifiedImage;
+
+// 全局图片变量
+static UnifiedImage *test_img = NULL;
+
+// 使用统一渲染器加载图片
+UnifiedImage *load_image_unified(UnifiedAdapter *adapter, const char *imagePath) {
+  if (!adapter) return NULL;
+  
+  int textureIndex = unified_adapter_load_texture(adapter, imagePath);
+  if (textureIndex < 0) {
     Log("加载图像失败: %s\n", imagePath);
     return NULL;
   }
-  Log("加载图像成功: %s (%dx%d)\n", imagePath, image->width, image->height);
+  
+  // 创建图片结构并获取真实纹理尺寸
+  UnifiedImage *image = malloc(sizeof(UnifiedImage));
+  if (!image) return NULL;
+  
+  image->textureIndex = textureIndex;
+  
+  // 获取纹理的真实尺寸
+  if (!unified_adapter_get_texture_dimensions(adapter, textureIndex, &image->width, &image->height)) {
+    Log("警告: 无法获取纹理尺寸，使用默认值\n");
+    image->width = 128;   // 默认宽度
+    image->height = 128;  // 默认高度
+  }
+  
+  Log("图像加载成功: %s (纹理索引: %d, 尺寸: %dx%d)\n", imagePath, textureIndex, image->width, image->height);
   return image;
 }
-
-WebGPUImage *test_img = NULL;
 
 static void onPrimaryButtonClick() { Log("点击了主要按钮\n"); }
 static void onSecondaryButtonClick() { Log("点击了次要按钮\n"); }
@@ -164,14 +185,30 @@ void AppLayout(void *userData) {
         CLAY_TEXT(CLAY_STRING("这是图片渲染测试。"),
                   CLAY_TEXT_CONFIG(
                       {.fontId = 0, .fontSize = 16, .textColor = TEXT_COLOR}));
-        Clay_LayoutConfig imageLayout = {
-            .sizing = {CLAY_SIZING_FIXED(test_img->width),
-                       CLAY_SIZING_FIXED(test_img->height)}};
-        Clay_ElementDeclaration imageElement = {
-            .id = CLAY_ID("TestImage"),
-            .layout = imageLayout,
-            .image = {.imageData = test_img}};
-        CLAY(imageElement);
+        
+        // 显示实际图片或占位符
+        Log("检查图片状态: test_img = %s\n", test_img ? "有效" : "NULL");
+        if (test_img != NULL) {
+          Log("创建Clay图片元素: 尺寸 %dx%d, 纹理索引 %d\n", 
+              test_img->width, test_img->height, test_img->textureIndex);
+          // 使用Clay的图片元素
+          CLAY({.id = CLAY_ID("TestImage"),
+                .layout = {.sizing = {CLAY_SIZING_FIXED(test_img->width), 
+                                     CLAY_SIZING_FIXED(test_img->height)}},
+                .image = {.imageData = test_img}}) {
+            Log("Clay图片元素已创建\n");     
+          };
+        } else {
+          Log("图片未加载，显示占位符\n");
+          // 图片未加载时显示占位符
+          CLAY({.id = CLAY_ID("ImagePlaceholder"),
+                .layout = {.sizing = {CLAY_SIZING_FIXED(200), CLAY_SIZING_FIXED(150)}},
+                .backgroundColor = (Clay_Color){100, 100, 100, 255},
+                .cornerRadius = CLAY_CORNER_RADIUS(8)}) {
+            CLAY_TEXT(CLAY_STRING("图片加载中..."),
+                      CLAY_TEXT_CONFIG({.fontId = 0, .fontSize = 14, .textColor = {255, 255, 255, 255}}));
+          }
+        }
       }
     }
   }
@@ -214,7 +251,10 @@ int main() {
                   (Clay_ErrorHandler){HandleClayErrors});
   Clay_SetMeasureTextFunction(MeasureText, ctx);
   Clay_WebGPU_LoadFont(ctx->clayRenderer, "assets/fonts/simhei.ttf", 16);
-  test_img = load_image(ctx->imageRenderer, "assets/img/10.png");
+  // 加载测试图片
+  test_img = load_image_unified(ctx->clayRenderer, "assets/img/10.png");
+  
+  Log("OIT透明渲染系统已启用\n");
 
   // App UI
   Runtime_SetLayoutCallback(ctx, AppLayout, ctx);

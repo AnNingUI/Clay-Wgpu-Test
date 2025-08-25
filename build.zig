@@ -29,7 +29,14 @@ pub fn build(b: *std.Build) void {
 
     const exe = b.addExecutable(.{ .name = all_name, .target = target, .optimize = optimize });
 
-    const cFiles = [_][]const u8{ "src/main.c", "src/DEV.c", "src/renderer/renderer.c", "src/renderer/text_renderer.c", "src/renderer/image_renderer.c", "src/clay_webgpu/runtime.c", "src/components/components.c" };
+    const cFiles = [_][]const u8{
+        "src/main.c",
+        "src/DEV.c",
+        "src/renderer/unified_adapter.c",
+        "src/renderer/unified_renderer.c",
+        "src/clay_webgpu/runtime.c",
+        "src/components/components.c",
+    };
 
     const cFlags = [_][]const u8{
         "-std=c99",
@@ -119,4 +126,14 @@ pub fn build(b: *std.Build) void {
 
     exe.linkLibC();
     b.installArtifact(exe);
+
+    // run cmd
+    const run_cmd = b.addRunArtifact(exe);
+    run_cmd.step.dependOn(b.getInstallStep());
+    if (b.args) |args| {
+        run_cmd.addArgs(args);
+    }
+
+    const run_step = b.step("run", "Run the app");
+    run_step.dependOn(&run_cmd.step);
 }

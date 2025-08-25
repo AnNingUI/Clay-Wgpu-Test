@@ -1,6 +1,5 @@
 #include "runtime.h"
 #include "../DEV.h"
-#include "../renderer/image_renderer.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <GLFW/glfw3.h>
@@ -185,7 +184,7 @@ void WindowResizeCallback(GLFWwindow *window, int width, int height) {
   ctx->surfaceConfig.height = height;
   wgpuSurfaceConfigure(ctx->surface, &ctx->surfaceConfig);
   Clay_SetLayoutDimensions((Clay_Dimensions){width, height});
-  if (ctx->clayRenderer) Clay_WebGPU_UpdateScreenSize(ctx->clayRenderer, width, height);
+  if (ctx->clayRenderer) unified_adapter_update_screen_size(ctx->clayRenderer, width, height);
 }
 
 RuntimeContext* Runtime_Init(GLFWwindow* window, uint32_t width, uint32_t height) {
@@ -201,12 +200,11 @@ RuntimeContext* Runtime_Init(GLFWwindow* window, uint32_t width, uint32_t height
     free(ctx);
     return NULL;
   }
-  ctx->clayRenderer = Clay_WebGPU_Initialize(ctx->device, ctx->queue, NULL, width, height);
+  ctx->clayRenderer = unified_adapter_create(ctx->device, ctx->queue, NULL, width, height);
   if (!ctx->clayRenderer) {
     Runtime_Destroy(ctx);
     return NULL;
   }
-  ctx->imageRenderer = image_renderer_create(ctx->device, ctx->queue);
   return ctx;
 }
 
@@ -249,44 +247,10 @@ void Runtime_Run(RuntimeContext* ctx) {
     Clay_SetPointerState((Clay_Vector2){mouseX, mouseY}, mousePressed);
     if (ctx->layoutFunc) ctx->layoutFunc(ctx->userData);
     Clay_RenderCommandArray renderCommands = Clay_EndLayout();
-    WGPUCommandEncoderDescriptor encoderDesc = {.label = {.data = "Main Command Encoder", .length = WGPU_STRLEN}};
-    WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(ctx->device, &encoderDesc);
+    
+    // 设置目标视图并使用统一渲染器进行渲染
     ctx->clayRenderer->targetView = backBuffer;
-    Clay_WebGPU_Render(ctx->clayRenderer, renderCommands);
-    if (ctx->imageRenderer) {
-      WGPURenderPassColorAttachment colorAttachment = {
-          .view = backBuffer,
-          .resolveTarget = NULL,
-          .clearValue = {0.0f, 0.0f, 0.0f, 0.0f},
-          .loadOp = WGPULoadOp_Load,
-          .storeOp = WGPUStoreOp_Store};
-      WGPURenderPassDepthStencilAttachment depthStencilAttachment = {
-          .view = ctx->clayRenderer->depthTextureView,
-          .depthClearValue = 0.0f,  // 修改为0.0f以匹配深度测试
-          .depthLoadOp = WGPULoadOp_Load,
-          .depthStoreOp = WGPUStoreOp_Store,
-          .depthReadOnly = false,
-          .stencilLoadOp = WGPULoadOp_Undefined,
-          .stencilStoreOp = WGPUStoreOp_Undefined,
-          .stencilClearValue = 0,
-          .stencilReadOnly = true
-      };
-      
-      WGPURenderPassDescriptor renderPassDesc = {
-          .label = {.data = "Image Render Pass", .length = WGPU_STRLEN},
-          .colorAttachmentCount = 1,
-          .colorAttachments = &colorAttachment,
-          .depthStencilAttachment = &depthStencilAttachment};
-      WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
-      image_renderer_process_clay_commands(ctx->imageRenderer, renderPass, renderCommands, ctx->windowWidth, ctx->windowHeight);
-      wgpuRenderPassEncoderEnd(renderPass);
-      wgpuRenderPassEncoderRelease(renderPass);
-    }
-    WGPUCommandBufferDescriptor commandBufferDesc = {.label = {.data = "Main Command Buffer", .length = WGPU_STRLEN}};
-    WGPUCommandBuffer commandBuffer = wgpuCommandEncoderFinish(encoder, &commandBufferDesc);
-    wgpuQueueSubmit(ctx->queue, 1, &commandBuffer);
-    wgpuCommandBufferRelease(commandBuffer);
-    wgpuCommandEncoderRelease(encoder);
+    unified_adapter_render(ctx->clayRenderer, renderCommands);
     wgpuDevicePoll(ctx->device, false, NULL);
     wgpuTextureViewRelease(backBuffer);
     wgpuSurfacePresent(ctx->surface);
@@ -297,7 +261,7 @@ void Runtime_Destroy(RuntimeContext* ctx) {
   if (!ctx) return;
   if (ctx->device) wgpuDevicePoll(ctx->device, true, NULL);
   if (ctx->clayRenderer) {
-    Clay_WebGPU_Cleanup(ctx->clayRenderer);
+    unified_adapter_destroy(ctx->clayRenderer);
     ctx->clayRenderer = NULL;
   }
   if (ctx->device) wgpuDevicePoll(ctx->device, true, NULL);
@@ -314,10 +278,7 @@ void Runtime_Destroy(RuntimeContext* ctx) {
     wgpuInstanceRelease(ctx->instance);
     ctx->instance = NULL;
   }
-  if (ctx->imageRenderer) {
-    image_renderer_destroy(ctx->imageRenderer);
-    ctx->imageRenderer = NULL;
-  }
+
   free(ctx);
 }
 
