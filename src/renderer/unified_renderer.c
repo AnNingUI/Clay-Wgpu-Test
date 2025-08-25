@@ -961,17 +961,14 @@ void unified_renderer_add_image(UnifiedRenderer *renderer,
     float b = unified_color_to_float(tintColor.b);
     float a = unified_color_to_float(tintColor.a);
     
-    // 转换屏幕坐标到NDC
-    float ndcX = (x / renderer->screenWidth) * 2.0f - 1.0f;
-    float ndcY = 1.0f - (y / renderer->screenHeight) * 2.0f;
-    float ndcWidth = (width / renderer->screenWidth) * 2.0f;
-    float ndcHeight = (height / renderer->screenHeight) * 2.0f;
+    // 直接使用屏幕坐标，让顶点着色器进行NDC转换
+    float x1 = x, y1 = y;                    // 左上角
+    float x2 = x + width, y2 = y;            // 右上角  
+    float x3 = x + width, y3 = y + height;   // 右下角
+    float x4 = x, y4 = y + height;           // 左下角
     
-    // 计算四个顶点的位置
-    float x1 = ndcX, y1 = ndcY;
-    float x2 = ndcX + ndcWidth, y2 = ndcY;
-    float x3 = ndcX + ndcWidth, y3 = ndcY - ndcHeight;
-    float x4 = ndcX, y4 = ndcY - ndcHeight;
+    Log("添加图像顶点: (%f,%f) (%f,%f) (%f,%f) (%f,%f)\n", 
+        x1, y1, x2, y2, x3, y3, x4, y4);
     
     // 添加四个顶点（左上、右上、右下、左下）
     int baseVertex = renderer->vertexCount;

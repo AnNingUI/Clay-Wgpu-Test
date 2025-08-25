@@ -399,15 +399,6 @@ void unified_adapter_set_error_callback(UnifiedAdapter *adapter,
         Log("错误回调已设置\n");
     }
 }
-
-static void unified_adapter_report_error(UnifiedAdapterError error, const char *message) {
-    if (global_error_callback) {
-        global_error_callback(error, message, global_error_userdata);
-    } else {
-        Log("错误: %s\n", message);
-    }
-}
-
 // ===== 内部辅助函数的具体实现 =====
 
 // 实现process_render_commands的具体版本（替代inline版本）

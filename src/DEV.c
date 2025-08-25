@@ -11,7 +11,7 @@
 #include <unistd.h>
 #endif
 
-const bool DEV_MODE = true;
+const bool DEV_MODE = false;
 
 void Log(const char *format, ...) {
   if (DEV_MODE) {
