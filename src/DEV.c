@@ -1,16 +1,20 @@
 #include "DEV.h"
 #include <stdio.h>
 
+#include "DEV.h"
+#include <stdio.h>
+
 #ifdef _WIN32
 #include <windows.h>
 #elif defined(__linux__)
-#include <unistd.h>
+// Make sure this is defined before including <time.h>
+#define _POSIX_C_SOURCE 200809L
 #include <time.h>
+#include <unistd.h>
 #elif defined(__APPLE__)
 #include <sys/time.h>
 #include <unistd.h>
 #endif
-
 const bool DEV_MODE = false;
 
 void Log(const char *format, ...) {

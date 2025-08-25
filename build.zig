@@ -43,6 +43,7 @@ pub fn build(b: *std.Build) void {
         // UTF-8 编码
         "-D_UNICODE",
         "-DUNICODE",
+        "-D_POSIX_C_SOURCE=200809L",
     };
 
     exe.addCSourceFiles(.{
