@@ -8,8 +8,8 @@
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype.h"
 
-// WebGPU着色器代码
-static const char *text_vertex_shader_wgsl =
+// WebGPU着色器代码 (合并顶点和片元着色器)
+static const char *text_shader_wgsl =
     "struct VertexInput {\n"
     "    @location(0) position: vec2<f32>,\n"
     "    @location(1) texCoords: vec2<f32>,\n"
@@ -30,9 +30,8 @@ static const char *text_vertex_shader_wgsl =
     "    output.texCoords = input.texCoords;\n"
     "    output.color = input.color;\n"
     "    return output;\n"
-    "}\n";
-
-static const char *text_fragment_shader_wgsl =
+    "}\n"
+    "\n"
     "struct FragmentInput {\n"
     "    @location(0) texCoords: vec2<f32>,\n"
     "    @location(1) color: vec4<f32>,\n"
@@ -192,27 +191,16 @@ static WGPUBindGroupLayout text_bind_group_layout = NULL;
 
 static bool create_text_pipeline(TextRenderer *renderer) {
   // 创建着色器模块
-  WGPUShaderSourceWGSL vertex_shader_source = {
+  WGPUShaderSourceWGSL shader_source = {
       .chain = {.sType = WGPUSType_ShaderSourceWGSL},
-      .code = {.data = text_vertex_shader_wgsl, .length = WGPU_STRLEN}};
+      .code = {.data = text_shader_wgsl, .length = WGPU_STRLEN}};
 
-  WGPUShaderModuleDescriptor vertex_shader_desc = {
-      .nextInChain = (const WGPUChainedStruct *)&vertex_shader_source,
-      .label = {.data = "Text Vertex Shader", .length = WGPU_STRLEN}};
+  WGPUShaderModuleDescriptor shader_desc = {
+      .nextInChain = (const WGPUChainedStruct *)&shader_source,
+      .label = {.data = "Text Shader", .length = WGPU_STRLEN}};
 
-  WGPUShaderModule vertex_shader =
-      wgpuDeviceCreateShaderModule(renderer->device, &vertex_shader_desc);
-
-  WGPUShaderSourceWGSL fragment_shader_source = {
-      .chain = {.sType = WGPUSType_ShaderSourceWGSL},
-      .code = {.data = text_fragment_shader_wgsl, .length = WGPU_STRLEN}};
-
-  WGPUShaderModuleDescriptor fragment_shader_desc = {
-      .nextInChain = (const WGPUChainedStruct *)&fragment_shader_source,
-      .label = {.data = "Text Fragment Shader", .length = WGPU_STRLEN}};
-
-  WGPUShaderModule fragment_shader =
-      wgpuDeviceCreateShaderModule(renderer->device, &fragment_shader_desc);
+  WGPUShaderModule shader_module =
+      wgpuDeviceCreateShaderModule(renderer->device, &shader_desc);
 
   // 创建绑定组布局（移除uniform buffer）
   WGPUBindGroupLayoutEntry bind_group_entries[] = {
@@ -290,11 +278,11 @@ static bool create_text_pipeline(TextRenderer *renderer) {
   WGPURenderPipelineDescriptor pipeline_desc = {
       .label = {.data = "Text Render Pipeline", .length = WGPU_STRLEN},
       .layout = pipeline_layout,
-      .vertex = {.module = vertex_shader,
+      .vertex = {.module = shader_module,
                  .entryPoint = {.data = "vs_main", .length = WGPU_STRLEN},
                  .bufferCount = 1,
                  .buffers = &vertexBufferLayout},
-      .fragment = &(WGPUFragmentState){.module = fragment_shader,
+      .fragment = &(WGPUFragmentState){.module = shader_module,
                                        .entryPoint = {.data = "fs_main",
                                                       .length = WGPU_STRLEN},
                                        .targetCount = 1,
@@ -311,8 +299,7 @@ static bool create_text_pipeline(TextRenderer *renderer) {
       wgpuDeviceCreateRenderPipeline(renderer->device, &pipeline_desc);
 
   // 清理资源
-  wgpuShaderModuleRelease(vertex_shader);
-  wgpuShaderModuleRelease(fragment_shader);
+  wgpuShaderModuleRelease(shader_module);
   wgpuPipelineLayoutRelease(pipeline_layout);
 
   return renderer->text_pipeline != NULL;

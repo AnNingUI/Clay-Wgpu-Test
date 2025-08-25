@@ -104,7 +104,11 @@ static float sidebarOffset = -300.0f; // 动画偏移值
 void ToggleSidebar() { sidebarVisible = !sidebarVisible; }
 
 void HeaderComponent(Clay_String title) {
-  CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(80)},
+  CLAY({
+    .floating = {
+      .attachTo = CLAY_ATTACH_TO_ROOT,
+    },
+    .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(80)},
                    .padding = {20, 20, 0, 0},
                    .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER},
                    .layoutDirection = CLAY_LEFT_TO_RIGHT,
@@ -123,6 +127,9 @@ void HeaderComponent(Clay_String title) {
                                        .fontSize = 28,
                                        .textColor = {255, 255, 255, 255}}));
   }
+  CLAY({
+    .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(80)}},
+  }) {}
 }
 
 static float previousTime = 0.0f;
@@ -152,7 +159,7 @@ void AnimatedSidebar() {
                    .padding = CLAY_PADDING_ALL(16),
                    .childGap = 16},
         .backgroundColor = {
-          255, 255, 255, 255
+          255, 255, 255, 215
         },
         .border = {.color = {200, 200, 200, 255}, .width = {0, 1, 1, 0}}}) {
     // 侧边栏内容

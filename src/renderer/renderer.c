@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-// 矩形渲染着色器
-static const char *vertexShaderWGSL =
+// 矩形渲染着色器 (合并顶点和片元着色器)
+static const char *rectangleShaderWGSL =
     "struct VertexInput {\n"
     "    @location(0) position: vec2<f32>,\n"
     "    @location(1) color: vec4<f32>,\n"
@@ -31,9 +31,8 @@ static const char *vertexShaderWGSL =
     "    output.rect_size = input.rect_size;\n"
     "    output.corner_radius = input.corner_radius;\n"
     "    return output;\n"
-    "}\n";
-
-static const char *fragmentShaderWGSL =
+    "}\n"
+    "\n"
     "struct FragmentInput {\n"
     "    @location(0) color: vec4<f32>,\n"
     "    @location(1) local_pos: vec2<f32>,\n"
@@ -41,8 +40,7 @@ static const char *fragmentShaderWGSL =
     "    @location(3) corner_radius: vec4<f32>,\n" // tl, tr, br, bl
     "}\n"
     "\n"
-    // p: coordinates from center, b: half-size, r: corner radii (tl, tr, br,
-    // bl)
+    // p: coordinates from center, b: half-size, r: corner radii (tl, tr, br, bl)
     "fn sd_rounded_box(p: vec2<f32>, b: vec2<f32>, r: vec4<f32>) -> f32 {\n"
     "    var r_for_quadrant: f32;\n"
     "    if (p.x > 0.0) { \n"                             // right
@@ -53,8 +51,7 @@ static const char *fragmentShaderWGSL =
     "        else { r_for_quadrant = r.w; } \n"           // bottom-left
     "    }\n"
     "    let q = abs(p) - b + r_for_quadrant;\n"
-    "    return min(max(q.x, q.y), 0.0) + length(max(q, vec2<f32>(0.0))) - "
-    "r_for_quadrant;\n"
+    "    return min(max(q.x, q.y), 0.0) + length(max(q, vec2<f32>(0.0))) - r_for_quadrant;\n"
     "}\n"
     "\n"
     "@fragment\n"
@@ -104,27 +101,16 @@ Clay_WebGPU_Context *Clay_WebGPU_Initialize(WGPUDevice device, WGPUQueue queue,
   }
 
   // 创建矩形渲染的着色器模块
-  WGPUShaderSourceWGSL vertexShaderSource = {
+  WGPUShaderSourceWGSL shaderSource = {
       .chain = {.sType = WGPUSType_ShaderSourceWGSL},
-      .code = {.data = vertexShaderWGSL, .length = WGPU_STRLEN}};
+      .code = {.data = rectangleShaderWGSL, .length = WGPU_STRLEN}};
 
-  WGPUShaderModuleDescriptor vertexShaderDesc = {
-      .nextInChain = (const WGPUChainedStruct *)&vertexShaderSource,
-      .label = {.data = "Rectangle Vertex Shader", .length = WGPU_STRLEN}};
+  WGPUShaderModuleDescriptor shaderDesc = {
+      .nextInChain = (const WGPUChainedStruct *)&shaderSource,
+      .label = {.data = "Rectangle Shader", .length = WGPU_STRLEN}};
 
-  WGPUShaderModule vertexShader =
-      wgpuDeviceCreateShaderModule(device, &vertexShaderDesc);
-
-  WGPUShaderSourceWGSL fragmentShaderSource = {
-      .chain = {.sType = WGPUSType_ShaderSourceWGSL},
-      .code = {.data = fragmentShaderWGSL, .length = WGPU_STRLEN}};
-
-  WGPUShaderModuleDescriptor fragmentShaderDesc = {
-      .nextInChain = (const WGPUChainedStruct *)&fragmentShaderSource,
-      .label = {.data = "Rectangle Fragment Shader", .length = WGPU_STRLEN}};
-
-  WGPUShaderModule fragmentShader =
-      wgpuDeviceCreateShaderModule(device, &fragmentShaderDesc);
+  WGPUShaderModule shaderModule =
+      wgpuDeviceCreateShaderModule(device, &shaderDesc);
 
   // 创建顶点缓冲区
   WGPUBufferDescriptor vertexBufferDesc = {
@@ -194,7 +180,7 @@ Clay_WebGPU_Context *Clay_WebGPU_Initialize(WGPUDevice device, WGPUQueue queue,
   // 创建渲染管线
   WGPURenderPipelineDescriptor pipelineDesc = {
       .label = {.data = "Rectangle Pipeline", .length = WGPU_STRLEN},
-      .vertex = {.module = vertexShader,
+      .vertex = {.module = shaderModule,
                  .entryPoint = {.data = "vs_main", .length = WGPU_STRLEN},
                  .bufferCount = 1,
                  .buffers = &vertexBufferLayout},
@@ -205,7 +191,7 @@ Clay_WebGPU_Context *Clay_WebGPU_Initialize(WGPUDevice device, WGPUQueue queue,
       .depthStencil = &depthStencilState,
       .multisample = {.count = 1, .mask = ~0u, .alphaToCoverageEnabled = false},
       .fragment = &(WGPUFragmentState){
-          .module = fragmentShader,
+          .module = shaderModule,
           .entryPoint = {.data = "fs_main", .length = WGPU_STRLEN},
           .targetCount = 1,
           .targets = &(WGPUColorTargetState){
@@ -223,8 +209,7 @@ Clay_WebGPU_Context *Clay_WebGPU_Initialize(WGPUDevice device, WGPUQueue queue,
       wgpuDeviceCreateRenderPipeline(device, &pipelineDesc);
 
   // 清理着色器模块
-  wgpuShaderModuleRelease(vertexShader);
-  wgpuShaderModuleRelease(fragmentShader);
+  wgpuShaderModuleRelease(shaderModule);
   // wgpuTextureViewRelease(context->depthTextureView);
 
   Log("Clay WebGPU渲染器初始化完成\n");

@@ -8,8 +8,8 @@
 // 前向声明
 static void create_default_texture_and_sampler(ImageRenderer *renderer);
 
-// 图像渲染着色器
-static const char *imageVertexShaderWGSL =
+// 图像渲染着色器 (合并顶点和片元着色器)
+static const char *imageShaderWGSL =
     "struct VertexInput {\n"
     "    @location(0) position: vec2<f32>,\n"
     "    @location(1) texCoord: vec2<f32>,\n"
@@ -27,9 +27,8 @@ static const char *imageVertexShaderWGSL =
     "    output.position = vec4<f32>(input.position, input.z_index, 1.0);\n"
     "    output.texCoord = input.texCoord;\n"
     "    return output;\n"
-    "}\n";
-
-static const char *imageFragmentShaderWGSL =
+    "}\n"
+    "\n"
     "@group(0) @binding(0) var textureSampler: sampler;\n"
     "@group(0) @binding(1) var texture: texture_2d<f32>;\n"
     "\n"
@@ -51,25 +50,15 @@ ImageRenderer *image_renderer_create(WGPUDevice device, WGPUQueue queue) {
   renderer->queue = queue;
 
   // 创建着色器模块
-  WGPUShaderSourceWGSL vertexShaderSource = {
+  WGPUShaderSourceWGSL shaderSource = {
       .chain = {.sType = WGPUSType_ShaderSourceWGSL},
-      .code = {.data = imageVertexShaderWGSL, .length = WGPU_STRLEN}};
+      .code = {.data = imageShaderWGSL, .length = WGPU_STRLEN}};
 
-  WGPUShaderModuleDescriptor vertexShaderDesc = {
-      .nextInChain = (const WGPUChainedStruct *)&vertexShaderSource,
-      .label = {.data = "Image Vertex Shader", .length = WGPU_STRLEN}};
-  WGPUShaderModule vertexShader =
-      wgpuDeviceCreateShaderModule(device, &vertexShaderDesc);
-
-  WGPUShaderSourceWGSL fragmentShaderSource = {
-      .chain = {.sType = WGPUSType_ShaderSourceWGSL},
-      .code = {.data = imageFragmentShaderWGSL, .length = WGPU_STRLEN}};
-
-  WGPUShaderModuleDescriptor fragmentShaderDesc = {
-      .nextInChain = (const WGPUChainedStruct *)&fragmentShaderSource,
-      .label = {.data = "Image Fragment Shader", .length = WGPU_STRLEN}};
-  WGPUShaderModule fragmentShader =
-      wgpuDeviceCreateShaderModule(device, &fragmentShaderDesc);
+  WGPUShaderModuleDescriptor shaderDesc = {
+      .nextInChain = (const WGPUChainedStruct *)&shaderSource,
+      .label = {.data = "Image Shader", .length = WGPU_STRLEN}};
+  WGPUShaderModule shaderModule =
+      wgpuDeviceCreateShaderModule(device, &shaderDesc);
 
   // 顶点属性配置
   WGPUVertexAttribute vertexAttributes[3] = {
@@ -136,11 +125,11 @@ ImageRenderer *image_renderer_create(WGPUDevice device, WGPUQueue queue) {
   WGPURenderPipelineDescriptor pipelineDesc = {
       .label = {.data = "Image Pipeline", .length = WGPU_STRLEN},
       .layout = renderer->imagePipelineLayout,
-      .vertex = {.module = vertexShader,
+      .vertex = {.module = shaderModule,
                  .entryPoint = {.data = "vs_main", .length = WGPU_STRLEN},
                  .bufferCount = 1,
                  .buffers = &vertexBufferLayout},
-      .fragment = &(WGPUFragmentState){.module = fragmentShader,
+      .fragment = &(WGPUFragmentState){.module = shaderModule,
                                        .entryPoint = {.data = "fs_main",
                                                       .length = WGPU_STRLEN},
                                        .targetCount = 1,
@@ -171,8 +160,7 @@ ImageRenderer *image_renderer_create(WGPUDevice device, WGPUQueue queue) {
   create_default_texture_and_sampler(renderer);
 
   // 清理着色器模块
-  wgpuShaderModuleRelease(vertexShader);
-  wgpuShaderModuleRelease(fragmentShader);
+  wgpuShaderModuleRelease(shaderModule);
 
   Log("图像渲染器创建成功\n");
   return renderer;
