@@ -224,9 +224,11 @@ UnifiedRenderer* unified_renderer_create(WGPUDevice device, WGPUQueue queue,
     renderer->screenHeight = screenHeight;
     
     // 初始化渲染数据
-    renderer->vertices = malloc(UNIFIED_MAX_VERTICES * sizeof(UnifiedVertex));
-    renderer->indices = malloc(UNIFIED_MAX_INDICES * sizeof(uint16_t));
-    renderer->batchCapacity = 256;
+    renderer->vertexCapacity = 1024; // 从最大值开始更小
+    renderer->indexCapacity = 1536;  // 1024 * 1.5
+    renderer->vertices = malloc(renderer->vertexCapacity * sizeof(UnifiedVertex));
+    renderer->indices = malloc(renderer->indexCapacity * sizeof(uint16_t));
+    renderer->batchCapacity = 32;    // 从256减少到32
     renderer->batches = malloc(renderer->batchCapacity * sizeof(UnifiedRenderBatch));
     
     // 创建深度纹理
@@ -241,7 +243,7 @@ UnifiedRenderer* unified_renderer_create(WGPUDevice device, WGPUQueue queue,
     renderer->depthTexture = wgpuDeviceCreateTexture(device, &depthDesc);
     renderer->depthTextureView = wgpuTextureCreateView(renderer->depthTexture, NULL);
     
-    // 创建顶点缓冲区
+    // 创建顶点缓冲区 - 使用最大尺寸以避免重新创建
     WGPUBufferDescriptor vertexBufferDesc = {
         .usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst,
         .size = UNIFIED_MAX_VERTICES * sizeof(UnifiedVertex),
@@ -249,7 +251,7 @@ UnifiedRenderer* unified_renderer_create(WGPUDevice device, WGPUQueue queue,
     };
     renderer->vertexBuffer = wgpuDeviceCreateBuffer(device, &vertexBufferDesc);
     
-    // 创建索引缓冲区
+    // 创建索引缓冲区 - 使用最大尺寸以避免重新创建
     WGPUBufferDescriptor indexBufferDesc = {
         .usage = WGPUBufferUsage_Index | WGPUBufferUsage_CopyDst,
         .size = UNIFIED_MAX_INDICES * sizeof(uint16_t),
@@ -453,6 +455,79 @@ UnifiedRenderer* unified_renderer_create(WGPUDevice device, WGPUQueue queue,
     return renderer;
 }
 
+// 动态扩容函数
+static bool unified_renderer_ensure_vertex_capacity(UnifiedRenderer *renderer, int requiredVertices) {
+    if (renderer->vertexCount + requiredVertices <= renderer->vertexCapacity) {
+        return true;
+    }
+    
+    int newCapacity = renderer->vertexCapacity;
+    while (newCapacity < renderer->vertexCount + requiredVertices) {
+        newCapacity *= 2;
+        if (newCapacity > UNIFIED_MAX_VERTICES) {
+            newCapacity = UNIFIED_MAX_VERTICES;
+            break;
+        }
+    }
+    
+    if (newCapacity <= renderer->vertexCapacity) {
+        return false; // 已达到最大容量
+    }
+    
+    UnifiedVertex *newVertices = realloc(renderer->vertices, newCapacity * sizeof(UnifiedVertex));
+    if (!newVertices) {
+        return false;
+    }
+    
+    renderer->vertices = newVertices;
+    renderer->vertexCapacity = newCapacity;
+    return true;
+}
+
+static bool unified_renderer_ensure_index_capacity(UnifiedRenderer *renderer, int requiredIndices) {
+    if (renderer->indexCount + requiredIndices <= renderer->indexCapacity) {
+        return true;
+    }
+    
+    int newCapacity = renderer->indexCapacity;
+    while (newCapacity < renderer->indexCount + requiredIndices) {
+        newCapacity *= 2;
+        if (newCapacity > UNIFIED_MAX_INDICES) {
+            newCapacity = UNIFIED_MAX_INDICES;
+            break;
+        }
+    }
+    
+    if (newCapacity <= renderer->indexCapacity) {
+        return false;
+    }
+    
+    uint16_t *newIndices = realloc(renderer->indices, newCapacity * sizeof(uint16_t));
+    if (!newIndices) {
+        return false;
+    }
+    
+    renderer->indices = newIndices;
+    renderer->indexCapacity = newCapacity;
+    return true;
+}
+
+static bool unified_renderer_ensure_batch_capacity(UnifiedRenderer *renderer, int requiredBatches) {
+    if (renderer->batchCount + requiredBatches <= renderer->batchCapacity) {
+        return true;
+    }
+    
+    int newCapacity = renderer->batchCapacity * 2;
+    UnifiedRenderBatch *newBatches = realloc(renderer->batches, newCapacity * sizeof(UnifiedRenderBatch));
+    if (!newBatches) {
+        return false;
+    }
+    
+    renderer->batches = newBatches;
+    renderer->batchCapacity = newCapacity;
+    return true;
+}
+
 // 调整渲染器大小
 void unified_renderer_resize(UnifiedRenderer *renderer, 
                            uint32_t screenWidth, uint32_t screenHeight) {
@@ -552,11 +627,15 @@ void unified_renderer_end_frame(UnifiedRenderer *renderer, WGPURenderPassEncoder
     wgpuQueueWriteBuffer(renderer->queue, renderer->uniformBuffer, 0, 
                         &renderer->uniforms, sizeof(renderer->uniforms));
     
-    // 更新顶点和索引缓冲区
-    wgpuQueueWriteBuffer(renderer->queue, renderer->vertexBuffer, 0,
-                        renderer->vertices, renderer->vertexCount * sizeof(UnifiedVertex));
-    wgpuQueueWriteBuffer(renderer->queue, renderer->indexBuffer, 0,
-                        renderer->indices, renderer->indexCount * sizeof(uint16_t));
+    // 更新顶点和索引缓冲区 - 只更新实际使用的部分
+    if (renderer->vertexCount > 0) {
+        wgpuQueueWriteBuffer(renderer->queue, renderer->vertexBuffer, 0,
+                            renderer->vertices, renderer->vertexCount * sizeof(UnifiedVertex));
+    }
+    if (renderer->indexCount > 0) {
+        wgpuQueueWriteBuffer(renderer->queue, renderer->indexBuffer, 0,
+                            renderer->indices, renderer->indexCount * sizeof(uint16_t));
+    }
     
     // 如果字体atlas需要更新
     if (renderer->fontAtlasDirty) {
@@ -755,10 +834,10 @@ void unified_renderer_add_rectangle(UnifiedRenderer *renderer,
                                   float x, float y, float width, float height,
                                   Clay_Color color, Clay_CornerRadius cornerRadius,
                                   float zIndex) {
-    if (renderer->vertexCount + 4 > UNIFIED_MAX_VERTICES ||
-        renderer->indexCount + 6 > UNIFIED_MAX_INDICES) {
-        Log("警告: 顶点缓冲区已满，跳过矩形渲染\n");
-        return; // 缓冲区已满
+    if (!unified_renderer_ensure_vertex_capacity(renderer, 4) ||
+        !unified_renderer_ensure_index_capacity(renderer, 6)) {
+        Log("警告: 无法扩容缓冲区，跳过矩形渲染\n");
+        return;
     }
     
     Log("添加矩形: (%.1f, %.1f, %.1f, %.1f) 颜色: (%d, %d, %d, %d)\n", 
@@ -858,8 +937,9 @@ void unified_renderer_add_text(UnifiedRenderer *renderer,
     
     float currentX = x;
     const char *textPtr = text;
+    const char *textEnd = text + textLength;
     
-    for (int i = 0; i < textLength && *textPtr; i++) {
+    while (textPtr < textEnd && *textPtr) {
         uint32_t codepoint = unified_renderer_decode_utf8(&textPtr);
         if (codepoint == 0) break;
         
@@ -877,8 +957,8 @@ void unified_renderer_add_text(UnifiedRenderer *renderer,
         float glyphY = baselineY + glyph->offsetY;
         
         // 添加字符四边形
-        if (renderer->vertexCount + 4 <= UNIFIED_MAX_VERTICES &&
-            renderer->indexCount + 6 <= UNIFIED_MAX_INDICES) {
+        if (unified_renderer_ensure_vertex_capacity(renderer, 4) &&
+            unified_renderer_ensure_index_capacity(renderer, 6)) {
             
             float r = unified_color_to_float(color.r);
             float g = unified_color_to_float(color.g);
@@ -951,8 +1031,9 @@ void unified_renderer_add_image(UnifiedRenderer *renderer,
                               float x, float y, float width, float height,
                               Clay_Color tintColor, Clay_CornerRadius cornerRadius,
                               float zIndex) {
-    if (renderer->vertexCount + 4 > UNIFIED_MAX_VERTICES ||
-        renderer->indexCount + 6 > UNIFIED_MAX_INDICES) {
+    // 动态扩容检查
+    if (!unified_renderer_ensure_vertex_capacity(renderer, 4) ||
+        !unified_renderer_ensure_index_capacity(renderer, 6)) {
         return;
     }
     
@@ -1039,8 +1120,9 @@ void unified_renderer_add_border(UnifiedRenderer *renderer,
                                float x, float y, float width, float height,
                                Clay_Color color, float borderWidth,
                                Clay_CornerRadius cornerRadius, float zIndex) {
-    if (renderer->vertexCount + 4 > UNIFIED_MAX_VERTICES ||
-        renderer->indexCount + 6 > UNIFIED_MAX_INDICES) {
+    // 动态扩容检查
+    if (!unified_renderer_ensure_vertex_capacity(renderer, 4) ||
+        !unified_renderer_ensure_index_capacity(renderer, 6)) {
         return;
     }
     
@@ -1233,6 +1315,9 @@ bool unified_renderer_add_glyph_to_atlas(UnifiedRenderer *renderer,
     
     // 找到空闲的缓存槽
     int cacheIndex = -1;
+    static int lru_counter = 0;
+    
+    // 首先尝试找空闲槽
     for (int i = 0; i < UNIFIED_GLYPH_CACHE_SIZE; i++) {
         if (!renderer->glyphCache[i].valid) {
             cacheIndex = i;
@@ -1241,8 +1326,9 @@ bool unified_renderer_add_glyph_to_atlas(UnifiedRenderer *renderer,
     }
     
     if (cacheIndex == -1) {
-        // 缓存已满，替换第一个
-        cacheIndex = 0;
+        // 缓存已满，使用简单的轮转替换策略
+        cacheIndex = lru_counter % UNIFIED_GLYPH_CACHE_SIZE;
+        lru_counter++;
     }
     
     // 存储字形信息
@@ -1310,8 +1396,11 @@ void unified_renderer_optimize_batches(UnifiedRenderer *renderer) {
     int currentVertexIndex = 0;
     int currentIndexIndex = 0;
     
-    while (currentVertexIndex < renderer->vertexCount && 
-           renderer->batchCount < renderer->batchCapacity) {
+    while (currentVertexIndex < renderer->vertexCount) {
+        if (!unified_renderer_ensure_batch_capacity(renderer, 1)) {
+            Log("警告: 无法扩容批次数组\n");
+            break;
+        }
         
         // 获取当前顶点的纹理索引
         int currentTextureIndex = (int)renderer->vertices[currentVertexIndex].params[1];
@@ -1384,9 +1473,9 @@ float unified_renderer_measure_text(UnifiedRenderer *renderer, const char *text,
     
     float width = 0.0f;
     const char *textPtr = text;
-    int count = 0;
+    const char *textEnd = text + maxLength;
     
-    while (*textPtr && count < maxLength) {
+    while (textPtr < textEnd && *textPtr) {
         uint32_t codepoint = unified_renderer_decode_utf8(&textPtr);
         if (codepoint == 0) break;
         
@@ -1396,8 +1485,6 @@ float unified_renderer_measure_text(UnifiedRenderer *renderer, const char *text,
         } else {
             width += 8.0f; // 默认字符宽度
         }
-        
-        count++;
     }
     
     return width;

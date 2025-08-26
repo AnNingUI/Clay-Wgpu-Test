@@ -11,8 +11,8 @@
 #define UNIFIED_MAX_INDICES 98304
 #define UNIFIED_MAX_TEXTURES 64
 #define UNIFIED_MAX_FONTS 16
-#define UNIFIED_GLYPH_CACHE_SIZE 8192
-#define UNIFIED_ATLAS_SIZE 2048
+#define UNIFIED_GLYPH_CACHE_SIZE 2048  // 从8192减少到2048
+#define UNIFIED_ATLAS_SIZE 1024        // 从2048减少到1024
 
 // 渲染对象类型
 typedef enum {
@@ -132,6 +132,8 @@ typedef struct {
     uint16_t *indices;
     int vertexCount;
     int indexCount;
+    int vertexCapacity;  // 动态容量
+    int indexCapacity;   // 动态容量
     
     // 批次管理
     UnifiedRenderBatch *batches;

@@ -15,7 +15,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 #endif
-const bool DEV_MODE = true; // 启用开发模式以便调试
+const bool DEV_MODE = false; // 启用开发模式以便调试
 
 void Log(const char *format, ...) {
   if (DEV_MODE) {
