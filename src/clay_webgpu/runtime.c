@@ -74,6 +74,8 @@ bool InitializeWebGPU(RuntimeContext *ctx) {
   ctx->surface = CreateSurface(ctx->instance, ctx->window);
   if (!ctx->surface) {
     Log("Failed to create WebGPU surface\n");
+    wgpuInstanceRelease(ctx->instance);
+    ctx->instance = NULL;
     return false;
   }
   Log("WebGPU surface created successfully\n");
@@ -90,12 +92,16 @@ bool InitializeWebGPU(RuntimeContext *ctx) {
                                  .userdata1 = &adapter,
                              });
 
-  while (!adapter) {
+  // 添加超时机制防止无限等待
+  int timeout_count = 0;
+  const int MAX_TIMEOUT = 1000; // 最大等待次数
+  while (!adapter && timeout_count < MAX_TIMEOUT) {
     wgpuInstanceProcessEvents(ctx->instance);
+    timeout_count++;
   }
 
   if (!adapter) {
-    Log("Failed to get WebGPU adapter\n");
+    Log("Failed to get WebGPU adapter (timeout or error)\n");
     return false;
   }
   Log("WebGPU adapter obtained successfully\n");
@@ -114,12 +120,15 @@ bool InitializeWebGPU(RuntimeContext *ctx) {
                                .userdata1 = &ctx->device,
                            });
 
-  while (!ctx->device) {
+  // 添加超时机制防止无限等待
+  timeout_count = 0;
+  while (!ctx->device && timeout_count < MAX_TIMEOUT) {
     wgpuInstanceProcessEvents(ctx->instance);
+    timeout_count++;
   }
 
   if (!ctx->device) {
-    Log("Failed to get WebGPU device\n");
+    Log("Failed to get WebGPU device (timeout or error)\n");
     wgpuAdapterRelease(adapter);
     return false;
   }
@@ -172,19 +181,31 @@ void ScrollCallback(GLFWwindow *window, double xoffset, double yoffset) {
 
 void WindowResizeCallback(GLFWwindow *window, int width, int height) {
   RuntimeContext *ctx = (RuntimeContext *)glfwGetWindowUserPointer(window);
-  if (width <= 0 || height <= 0) return;
-  if (ctx->device) wgpuDevicePoll(ctx->device, true, NULL);
-  for (int i = 0; i < 3; i++) {
-    wgpuSurfacePresent(ctx->surface);
-    wgpuDevicePoll(ctx->device, true, NULL);
+  if (!ctx || width <= 0 || height <= 0) return;
+  
+  // 避免频繁调整相同尺寸
+  if (ctx->windowWidth == (uint32_t)width && ctx->windowHeight == (uint32_t)height) {
+    return;
   }
+  
+  Log("窗口尺寸调整: %dx%d -> %dx%d\n", ctx->windowWidth, ctx->windowHeight, width, height);
+  
+  if (ctx->device) wgpuDevicePoll(ctx->device, true, NULL);
+  
+  // 减少不必要的surface present调用
+  wgpuSurfacePresent(ctx->surface);
+  wgpuDevicePoll(ctx->device, true, NULL);
+  
   ctx->windowWidth = width;
   ctx->windowHeight = height;
   ctx->surfaceConfig.width = width;
   ctx->surfaceConfig.height = height;
   wgpuSurfaceConfigure(ctx->surface, &ctx->surfaceConfig);
   Clay_SetLayoutDimensions((Clay_Dimensions){width, height});
-  if (ctx->clayRenderer) unified_adapter_update_screen_size(ctx->clayRenderer, width, height);
+  
+  if (ctx->clayRenderer) {
+    unified_adapter_update_screen_size(ctx->clayRenderer, width, height);
+  }
 }
 
 RuntimeContext* Runtime_Init(GLFWwindow* window, uint32_t width, uint32_t height) {
@@ -217,44 +238,76 @@ void Runtime_SetLayoutCallback(RuntimeContext* ctx, void (*layoutFunc)(void* use
 
 void Runtime_Run(RuntimeContext* ctx) {
   if (!ctx) return;
+  
   glfwSetWindowUserPointer(ctx->window, ctx);
   glfwSetScrollCallback(ctx->window, ScrollCallback);
   glfwSetFramebufferSizeCallback(ctx->window, WindowResizeCallback);
+  
+  Log("开始主渲染循环\n");
+  
   while (!glfwWindowShouldClose(ctx->window)) {
     glfwPollEvents();
+    
     WGPUSurfaceTexture surfaceTexture;
     wgpuSurfaceGetCurrentTexture(ctx->surface, &surfaceTexture);
-    if (surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal && surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal) {
-      Log("Failed to get surface texture: %d\n", surfaceTexture.status);
+    
+    // 改进的表面纹理状态处理
+    if (surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal && 
+        surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal) {
+      
+      if (surfaceTexture.status == WGPUSurfaceGetCurrentTextureStatus_Outdated) {
+        Log("表面纹理过期，重新配置\n");
+        wgpuSurfaceConfigure(ctx->surface, &ctx->surfaceConfig);
+      } else {
+        Log("获取表面纹理失败: %d\n", surfaceTexture.status);
+      }
+      
       wgpuSurfacePresent(ctx->surface);
       wgpuDevicePoll(ctx->device, true, NULL);
-      VSleep(16);
       continue;
     }
+    
     if (!surfaceTexture.texture) {
       wgpuSurfacePresent(ctx->surface);
       continue;
     }
+    
     WGPUTextureView backBuffer = wgpuTextureCreateView(surfaceTexture.texture, NULL);
     if (!backBuffer) {
+      Log("创建纹理视图失败\n");
       wgpuSurfacePresent(ctx->surface);
       continue;
     }
+    
+    // 获取输入状态
     double mouseX, mouseY;
     glfwGetCursorPos(ctx->window, &mouseX, &mouseY);
     bool mousePressed = glfwGetMouseButton(ctx->window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+    
+    // 设置Clay布局参数
     Clay_SetLayoutDimensions((Clay_Dimensions){ctx->windowWidth, ctx->windowHeight});
     Clay_SetPointerState((Clay_Vector2){mouseX, mouseY}, mousePressed);
-    if (ctx->layoutFunc) ctx->layoutFunc(ctx->userData);
+    
+    // 执行用户布局函数
+    if (ctx->layoutFunc) {
+      ctx->layoutFunc(ctx->userData);
+    }
+    
     Clay_RenderCommandArray renderCommands = Clay_EndLayout();
     
-    // 设置目标视图并使用统一渲染器进行渲染
-    ctx->clayRenderer->targetView = backBuffer;
-    unified_adapter_render(ctx->clayRenderer, renderCommands);
+    // 设置目标视图并渲染
+    if (ctx->clayRenderer) {
+      ctx->clayRenderer->targetView = backBuffer;
+      unified_adapter_render(ctx->clayRenderer, renderCommands);
+    }
+    
+    // 完成帧渲染
     wgpuDevicePoll(ctx->device, false, NULL);
     wgpuTextureViewRelease(backBuffer);
     wgpuSurfacePresent(ctx->surface);
   }
+  
+  Log("主渲染循环结束\n");
 }
 
 void Runtime_Destroy(RuntimeContext* ctx) {

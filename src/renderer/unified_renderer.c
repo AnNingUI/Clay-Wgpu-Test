@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <assert.h>
+
 #ifdef _WIN32
 #include <io.h>
 #include <direct.h>
@@ -12,12 +14,18 @@
 #include <unistd.h>
 #endif
 
-
-// 引入STB库
+// 引入STB库 - 避免重复定义
 #define STB_IMAGE_IMPLEMENTATION
+#define STBI_NO_SIMD  // 避免SIMD冲突
 #include "stb_image.h"
+
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype.h"
+
+// 性能优化常量
+#define UNIFIED_BATCH_SIZE 1024
+#define UNIFIED_VERTEX_CACHE_SIZE 4096
+#define UNIFIED_INDEX_CACHE_SIZE 6144
 
 // 统一着色器WGSL代码
 static const char* unified_vertex_shader = 

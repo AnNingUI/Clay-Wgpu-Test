@@ -44,6 +44,14 @@ pub fn build(b: *std.Build) void {
         "-D_UNICODE",
         "-DUNICODE",
         "-D_POSIX_C_SOURCE=200809L",
+        // 优化标志
+        "-Wall",
+        "-Wextra",
+        "-Wno-unused-parameter",
+        "-Wno-unused-variable",
+        // 性能优化
+        "-O2",
+        "-ffast-math",
     };
 
     exe.addCSourceFiles(.{

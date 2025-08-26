@@ -48,17 +48,26 @@ static UnifiedImage *test_img = NULL;
 
 // 使用统一渲染器加载图片
 UnifiedImage *load_image_unified(UnifiedAdapter *adapter, const char *imagePath) {
-  if (!adapter) return NULL;
+  if (!adapter || !imagePath) {
+    Log("错误: 适配器或图片路径为空\n");
+    return NULL;
+  }
+  
+  Log("尝试加载图片: %s\n", imagePath);
   
   int textureIndex = unified_adapter_load_texture(adapter, imagePath);
   if (textureIndex < 0) {
-    Log("加载图像失败: %s\n", imagePath);
+    Log("加载图像失败: %s (纹理索引: %d)\n", imagePath, textureIndex);
     return NULL;
   }
   
   // 创建图片结构并获取真实纹理尺寸
   UnifiedImage *image = malloc(sizeof(UnifiedImage));
-  if (!image) return NULL;
+  if (!image) {
+    Log("错误: 图片结构内存分配失败\n");
+    unified_adapter_release_texture(adapter, textureIndex);
+    return NULL;
+  }
   
   image->textureIndex = textureIndex;
   
@@ -67,6 +76,13 @@ UnifiedImage *load_image_unified(UnifiedAdapter *adapter, const char *imagePath)
     Log("警告: 无法获取纹理尺寸，使用默认值\n");
     image->width = 128;   // 默认宽度
     image->height = 128;  // 默认高度
+  }
+  
+  // 验证尺寸合理性
+  if (image->width <= 0 || image->height <= 0 || image->width > 4096 || image->height > 4096) {
+    Log("警告: 图片尺寸异常 %dx%d，重置为默认值\n", image->width, image->height);
+    image->width = 128;
+    image->height = 128;
   }
   
   Log("图像加载成功: %s (纹理索引: %d, 尺寸: %dx%d)\n", imagePath, textureIndex, image->width, image->height);

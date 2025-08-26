@@ -75,6 +75,11 @@ void unified_adapter_render(UnifiedAdapter *adapter,
         return;
     }
     
+    // 跳过空渲染命令
+    if (renderCommands.length == 0) {
+        return;
+    }
+    
     adapter->frameCount++;
     
     if (adapter->debugMode) {
@@ -82,11 +87,22 @@ void unified_adapter_render(UnifiedAdapter *adapter,
             adapter->frameCount, renderCommands.length);
     }
     
+    // 验证目标视图
+    if (!adapter->targetView) {
+        Log("错误: 目标视图为空\n");
+        return;
+    }
+    
     // 创建渲染通道
     WGPUCommandEncoderDescriptor encoderDesc = {
         .label = {.data = "Unified Adapter Encoder", .length = WGPU_STRLEN}
     };
     WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(adapter->device, &encoderDesc);
+    
+    if (!encoder) {
+        Log("错误: 创建命令编码器失败\n");
+        return;
+    }
     
     // 创建颜色附件
     WGPURenderPassColorAttachment colorAttachment = {
@@ -97,8 +113,6 @@ void unified_adapter_render(UnifiedAdapter *adapter,
         .storeOp = WGPUStoreOp_Store
     };
     
-    // 深度附件已禁用以简化渲染
-    
     // 创建渲染通道
     WGPURenderPassDescriptor renderPassDesc = {
         .label = {.data = "Unified Render Pass", .length = WGPU_STRLEN},
@@ -108,6 +122,12 @@ void unified_adapter_render(UnifiedAdapter *adapter,
     };
     
     WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
+    
+    if (!renderPass) {
+        Log("错误: 创建渲染通道失败\n");
+        wgpuCommandEncoderRelease(encoder);
+        return;
+    }
     
     // 处理渲染命令
     unified_adapter_process_render_commands(adapter, renderCommands);
@@ -124,10 +144,14 @@ void unified_adapter_render(UnifiedAdapter *adapter,
         .label = {.data = "Unified Command Buffer", .length = WGPU_STRLEN}
     };
     WGPUCommandBuffer commandBuffer = wgpuCommandEncoderFinish(encoder, &commandBufferDesc);
-    wgpuQueueSubmit(adapter->queue, 1, &commandBuffer);
     
-    // 清理资源
-    wgpuCommandBufferRelease(commandBuffer);
+    if (commandBuffer) {
+        wgpuQueueSubmit(adapter->queue, 1, &commandBuffer);
+        wgpuCommandBufferRelease(commandBuffer);
+    } else {
+        Log("错误: 创建命令缓冲区失败\n");
+    }
+    
     wgpuCommandEncoderRelease(encoder);
     
     if (adapter->debugMode) {
@@ -409,34 +433,53 @@ void unified_adapter_process_render_commands(UnifiedAdapter *adapter,
     // 开始帧渲染
     unified_renderer_begin_frame(adapter->unifiedRenderer);
     
+    // 统计不同类型的命令数量
+    int rectangleCount = 0, textCount = 0, imageCount = 0, borderCount = 0;
+    
     // 处理每个渲染命令
     for (int i = 0; i < renderCommands.length; i++) {
         Clay_RenderCommand *command = &renderCommands.internalArray[i];
         
-        // 简化的渲染命令日志
-        if (command->commandType == CLAY_RENDER_COMMAND_TYPE_IMAGE) {
-            Log("发现图片渲染命令 %d: 边界框=(%.1f,%.1f,%.1f,%.1f)\n", 
-                i, command->boundingBox.x, command->boundingBox.y, 
-                command->boundingBox.width, command->boundingBox.height);
+        // 验证命令有效性
+        if (!command) {
+            Log("警告: 渲染命令 %d 为空\n", i);
+            continue;
+        }
+        
+        // 跳过无效的边界框
+        if (command->boundingBox.width <= 0 || command->boundingBox.height <= 0) {
+            if (adapter->debugMode) {
+                Log("跳过无效边界框的命令 %d: (%.1f,%.1f,%.1f,%.1f)\n", 
+                    i, command->boundingBox.x, command->boundingBox.y, 
+                    command->boundingBox.width, command->boundingBox.height);
+            }
+            continue;
         }
         
         switch (command->commandType) {
             case CLAY_RENDER_COMMAND_TYPE_RECTANGLE: {
                 unified_renderer_process_clay_rectangle(adapter->unifiedRenderer, command);
+                rectangleCount++;
                 break;
             }
             case CLAY_RENDER_COMMAND_TYPE_TEXT: {
                 unified_renderer_process_clay_text(adapter->unifiedRenderer, command);
+                textCount++;
                 break;
             }
             case CLAY_RENDER_COMMAND_TYPE_IMAGE: {
-                Log(">>> 开始处理图片渲染命令\n");
+                if (adapter->debugMode) {
+                    Log("处理图片命令 %d: 边界框=(%.1f,%.1f,%.1f,%.1f)\n", 
+                        i, command->boundingBox.x, command->boundingBox.y, 
+                        command->boundingBox.width, command->boundingBox.height);
+                }
                 unified_renderer_process_clay_image(adapter->unifiedRenderer, command);
-                Log(">>> 图片渲染命令处理完成\n");
+                imageCount++;
                 break;
             }
             case CLAY_RENDER_COMMAND_TYPE_BORDER: {
                 unified_renderer_process_clay_border(adapter->unifiedRenderer, command);
+                borderCount++;
                 break;
             }
             case CLAY_RENDER_COMMAND_TYPE_SCISSOR_START: {
@@ -448,7 +491,6 @@ void unified_adapter_process_render_commands(UnifiedAdapter *adapter,
                 break;
             }
             case CLAY_RENDER_COMMAND_TYPE_CUSTOM: {
-                // 处理自定义渲染命令
                 if (adapter->debugMode) {
                     Log("处理自定义渲染命令 (Z: %.3f)\n", command->zIndex);
                 }
@@ -461,7 +503,8 @@ void unified_adapter_process_render_commands(UnifiedAdapter *adapter,
     }
     
     if (adapter->debugMode) {
-        Log("处理了 %d 个渲染命令\n", renderCommands.length);
+        Log("渲染命令统计 - 矩形:%d, 文本:%d, 图片:%d, 边框:%d, 总计:%d\n", 
+            rectangleCount, textCount, imageCount, borderCount, renderCommands.length);
     }
 }
 

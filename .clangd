@@ -8,16 +8,17 @@ CompileFlags:
     - -Wno-pragma-pack
     - -Wall
     - -Wno-missing-prototypes
-    
+    - -D_UCRT_DISABLE_CLANG_WARNINGS
     - -Ic:/llvm/include
     - -Id:/Software/Dev/msys64/ucrt64/include
 
     - -I../include
     - -I../../include
+    - -I../../../include
 
 ---
 Diagnostics:
-  Suppress: 
+  Suppress:
     - invalid_token_after_toplevel_declarator
 
 # 针对 C 语言源文件 (.c)
@@ -41,7 +42,7 @@ CompileFlags:
 If:
   PathMatch: .*\.h$
   # 排除所有被 C++ 源文件所包含的头文件，以防止C++头文件被当作C头文件解析
-  PathExclude: .*\.cpp$ 
+  PathExclude: .*\.cpp$
 CompileFlags:
   Add: [-std=c99, -x, c-header]
 

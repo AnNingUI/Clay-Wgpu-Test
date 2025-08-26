@@ -15,17 +15,25 @@
 #include <sys/time.h>
 #include <unistd.h>
 #endif
-const bool DEV_MODE = false;
+const bool DEV_MODE = true; // 启用开发模式以便调试
 
 void Log(const char *format, ...) {
   if (DEV_MODE) {
     va_list args;
     va_start(args, format);
+    
+    // 添加时间戳
+    float currentTime = GetCurrentTimeInSeconds();
+    printf("[%.3f] ", currentTime);
+    
 #ifdef _WIN32
     vprintf_s(format, args);
 #else
     vfprintf(stdout, format, args);
 #endif
+    
+    // 确保立即输出
+    fflush(stdout);
     va_end(args);
   }
 }
