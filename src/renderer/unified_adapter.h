@@ -55,10 +55,10 @@ void unified_adapter_render(UnifiedAdapter *adapter,
 int unified_adapter_load_font(UnifiedAdapter *adapter, const char *fontPath, int fontSize);
 bool unified_adapter_set_default_font(UnifiedAdapter *adapter, int fontId);
 
-// 文本测量（为Clay布局系统提供）
-float unified_adapter_measure_text_width(UnifiedAdapter *adapter, 
-                                        const char *text, int textLength, int fontId);
 float unified_adapter_get_line_height(UnifiedAdapter *adapter, int fontId);
+
+// 字体查找
+int unified_adapter_get_font_id_by_path(UnifiedAdapter *adapter, const char *fontPath);
 
 // ===== 兼容性API - 与原有Clay_WebGPU_Context接口兼容 =====
 
@@ -72,6 +72,7 @@ float unified_adapter_get_line_height(UnifiedAdapter *adapter, int fontId);
 // 兼容性包装函数
 bool Clay_WebGPU_LoadFont(UnifiedAdapter *adapter, const char *fontPath, int fontSize);
 bool Clay_WebGPU_SetDefaultFont(UnifiedAdapter *adapter, int fontId);
+int Clay_WebGPU_GetFontId(UnifiedAdapter *adapter, const char *fontPath);
 void Clay_WebGPU_PrintTextStats(UnifiedAdapter *adapter);
 
 // 文本渲染兼容函数

@@ -56,6 +56,7 @@ typedef struct {
     int fontSize;
     float scale;
     float lineHeight;
+    int priority; // 字体优先级，数值越小优先级越高
     
     // STB字体数据
     unsigned char *fontBuffer;
@@ -182,6 +183,7 @@ bool unified_renderer_get_texture_dimensions(UnifiedRenderer *renderer, int text
 
 // 字体管理
 int unified_renderer_load_font(UnifiedRenderer *renderer, const char *fontPath, int fontSize);
+int unified_renderer_load_font_with_priority(UnifiedRenderer *renderer, const char *fontPath, int fontSize, int priority);
 bool unified_renderer_set_default_font(UnifiedRenderer *renderer, int fontId);
 float unified_renderer_measure_text(UnifiedRenderer *renderer, const char *text, 
                                    int fontId, int maxLength);

@@ -1,5 +1,6 @@
 #include "unified_renderer.h"
 #include "../DEV.h"
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -763,7 +764,11 @@ void unified_renderer_process_clay_text(UnifiedRenderer *renderer,
     const char *text = textData->stringContents.chars;
     int textLength = textData->stringContents.length;
     Clay_Color color = textData->textColor;
-    int fontId = renderer->defaultFontId; // 使用默认字体
+    uint16_t fontSize = textData->fontSize;
+    
+    // 优先使用文本配置中的字体ID，否则使用默认字体
+    int fontId = (textData->fontId >= 0 && textData->fontId < renderer->fontCount) ? 
+                 textData->fontId : renderer->defaultFontId;
     
     unified_renderer_add_text(renderer, text, textLength,
                              bbox.x, bbox.y, color, fontId, command->zIndex);
@@ -1211,6 +1216,7 @@ int unified_renderer_load_font(UnifiedRenderer *renderer, const char *fontPath, 
     font->fontSize = fontSize;
     font->scale = scale;
     font->lineHeight = (ascent - descent + lineGap) * scale;
+    font->priority = renderer->fontCount; // 默认优先级为加载顺序
     font->fontBuffer = fontBuffer;
     font->fontBufferSize = fileSize;
     font->stbFont = fontInfo;
@@ -1230,7 +1236,7 @@ bool unified_renderer_set_default_font(UnifiedRenderer *renderer, int fontId) {
     return true;
 }
 
-// 获取字形
+// 获取字形（支持字体回退）
 UnifiedGlyph* unified_renderer_get_glyph(UnifiedRenderer *renderer,
                                         uint32_t codepoint, int fontId) {
     // 在缓存中查找
@@ -1242,7 +1248,7 @@ UnifiedGlyph* unified_renderer_get_glyph(UnifiedRenderer *renderer,
         }
     }
     
-    // 缓存未命中，生成新字形
+    // 缓存未命中，尝试从指定字体生成字形
     renderer->glyphCacheMisses++;
     if (unified_renderer_add_glyph_to_atlas(renderer, codepoint, fontId)) {
         // 再次查找
@@ -1254,6 +1260,32 @@ UnifiedGlyph* unified_renderer_get_glyph(UnifiedRenderer *renderer,
         }
     }
     
+    // 字体回退：如果指定字体无法渲染该字符，尝试其他字体
+    for (int fallbackFontId = 0; fallbackFontId < renderer->fontCount; fallbackFontId++) {
+        if (fallbackFontId == fontId) continue; // 跳过已尝试的字体
+        
+        // 检查缓存中是否已有该字符的其他字体版本
+        for (int i = 0; i < UNIFIED_GLYPH_CACHE_SIZE; i++) {
+            if (renderer->glyphCache[i].codepoint == codepoint && 
+                renderer->glyphCache[i].fontId == fallbackFontId && renderer->glyphCache[i].valid) {
+                Log("字体回退: 字符 U+%04X 从字体 %d 回退到字体 %d\n", codepoint, fontId, fallbackFontId);
+                return &renderer->glyphCache[i];
+            }
+        }
+        
+        // 尝试从回退字体生成字形
+        if (unified_renderer_add_glyph_to_atlas(renderer, codepoint, fallbackFontId)) {
+            for (int i = 0; i < UNIFIED_GLYPH_CACHE_SIZE; i++) {
+                if (renderer->glyphCache[i].codepoint == codepoint && 
+                    renderer->glyphCache[i].fontId == fallbackFontId && renderer->glyphCache[i].valid) {
+                    Log("字体回退成功: 字符 U+%04X 使用字体 %d\n", codepoint, fallbackFontId);
+                    return &renderer->glyphCache[i];
+                }
+            }
+        }
+    }
+    
+    Log("警告: 字符 U+%04X 在所有字体中都无法渲染\n", codepoint);
     return NULL;
 }
 
@@ -1267,6 +1299,13 @@ bool unified_renderer_add_glyph_to_atlas(UnifiedRenderer *renderer,
     
     stbtt_fontinfo *fontInfo = (stbtt_fontinfo*)font->stbFont;
     
+    // 首先检查字体是否包含该字符
+    int glyphIndex = stbtt_FindGlyphIndex(fontInfo, codepoint);
+    if (glyphIndex == 0) {
+        // 字体不包含该字符
+        return false;
+    }
+    
     // 获取字形信息
     int advance, lsb;
     stbtt_GetCodepointHMetrics(fontInfo, codepoint, &advance, &lsb);
@@ -1277,7 +1316,43 @@ bool unified_renderer_add_glyph_to_atlas(UnifiedRenderer *renderer,
     int width = x1 - x0;
     int height = y1 - y0;
     
-    if (width <= 0 || height <= 0) return false;
+    if (width <= 0 || height <= 0) {
+        // 对于空白字符（如空格），仍然需要创建字形记录
+        if (advance > 0) {
+            // 创建空白字形
+            int cacheIndex = -1;
+            static int lru_counter = 0;
+            
+            for (int i = 0; i < UNIFIED_GLYPH_CACHE_SIZE; i++) {
+                if (!renderer->glyphCache[i].valid) {
+                    cacheIndex = i;
+                    break;
+                }
+            }
+            
+            if (cacheIndex == -1) {
+                cacheIndex = lru_counter % UNIFIED_GLYPH_CACHE_SIZE;
+                lru_counter++;
+            }
+            
+            UnifiedGlyph *glyph = &renderer->glyphCache[cacheIndex];
+            glyph->codepoint = codepoint;
+            glyph->fontId = fontId;
+            glyph->uvX = 0.0f;
+            glyph->uvY = 0.0f;
+            glyph->uvWidth = 0.0f;
+            glyph->uvHeight = 0.0f;
+            glyph->width = 0;
+            glyph->height = 0;
+            glyph->offsetX = 0;
+            glyph->offsetY = 0;
+            glyph->advance = advance * font->scale;
+            glyph->valid = true;
+            
+            return true;
+        }
+        return false;
+    }
     
     // 检查atlas是否有足够空间
     if (renderer->fontAtlasX + width > UNIFIED_ATLAS_SIZE) {

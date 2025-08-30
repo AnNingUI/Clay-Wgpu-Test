@@ -267,6 +267,7 @@ int main() {
                   (Clay_ErrorHandler){HandleClayErrors});
   Clay_SetMeasureTextFunction(MeasureText, ctx);
   Clay_WebGPU_LoadFont(ctx->clayRenderer, "assets/fonts/simhei.ttf", 16);
+  Clay_WebGPU_LoadFont(ctx->clayRenderer, "assets/fonts/JetBrainsMonoNerdFontMono-Regular.ttf", 16);
   // 加载测试图片
   test_img = load_image_unified(ctx->clayRenderer, "assets/img/10.png");
   

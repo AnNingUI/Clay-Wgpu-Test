@@ -16,6 +16,7 @@ extern const Clay_Color TEXT_COLOR;       // Dark Gray
 typedef void (*ButtonClickListener)(void);
 typedef struct {
   Clay_String text;
+  uint16_t fontSize;
   Clay_Color backgroundColor;
   Clay_ElementId buttonId;
   ButtonClickListener on_click;

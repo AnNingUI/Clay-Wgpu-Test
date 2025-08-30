@@ -193,16 +193,16 @@ bool unified_adapter_set_default_font(UnifiedAdapter *adapter, int fontId) {
     return false;
 }
 
-// 文本测量
-float unified_adapter_measure_text_width(UnifiedAdapter *adapter, 
-                                        const char *text, int textLength, int fontId) {
-    if (!adapter || !adapter->unifiedRenderer) return 0.0f;
+// 获取字体ID（通过路径查找）
+int unified_adapter_get_font_id_by_path(UnifiedAdapter *adapter, const char *fontPath) {
+    if (!adapter || !adapter->unifiedRenderer || !fontPath) return -1;
     
-    if (fontId < 0) {
-        fontId = adapter->defaultFontId;
+    for (int i = 0; i < adapter->unifiedRenderer->fontCount; i++) {
+        if (strcmp(adapter->unifiedRenderer->fonts[i].fontPath, fontPath) == 0) {
+            return i;
+        }
     }
-    
-    return unified_renderer_measure_text(adapter->unifiedRenderer, text, fontId, textLength);
+    return -1;
 }
 
 // 添加与Clay文本测量回调兼容的函数
@@ -244,6 +244,11 @@ bool Clay_WebGPU_LoadFont(UnifiedAdapter *adapter, const char *fontPath, int fon
 
 bool Clay_WebGPU_SetDefaultFont(UnifiedAdapter *adapter, int fontId) {
     return unified_adapter_set_default_font(adapter, fontId);
+}
+
+// 获取字体ID的便捷函数
+int Clay_WebGPU_GetFontId(UnifiedAdapter *adapter, const char *fontPath) {
+    return unified_adapter_get_font_id_by_path(adapter, fontPath);
 }
 
 // 添加兼容性函数

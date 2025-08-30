@@ -83,7 +83,7 @@ void ButtonComponent(ButtonData *data) {
     isClicked = false;
     lastPressedId = (Clay_ElementId){0};
   }
-
+  // printf("fontSize is %d", data->fontSize ? data->fontSize : 14);
   CLAY(
       {.id = buttonId,
        .layout = {.sizing = {CLAY_SIZING_FIXED(120), CLAY_SIZING_FIXED(40)},
@@ -92,7 +92,7 @@ void ButtonComponent(ButtonData *data) {
        .backgroundColor = buttonColor,
        .cornerRadius = CLAY_CORNER_RADIUS(6)}) {
     CLAY_TEXT(text, CLAY_TEXT_CONFIG({.fontId = 0,
-                                      .fontSize = 14,
+                                      .fontSize = data->fontSize ? data->fontSize : 14,
                                       .textColor = {255, 255, 255, 255}}));
   }
 }
@@ -117,6 +117,7 @@ void HeaderComponent(Clay_String title) {
 
     // 菜单按钮
     ButtonData menuButton = {.text = CLAY_STRING("☰"),
+                             .fontSize = 24,
                              .backgroundColor = ACCENT_COLOR,
                              .buttonId = CLAY_ID("MenuButton"),
                              .on_click = ToggleSidebar};
