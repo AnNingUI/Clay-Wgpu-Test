@@ -1,5 +1,6 @@
 #include "unified_renderer.h"
 #include "../DEV.h"
+#include "shader.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,164 +29,7 @@
 #define UNIFIED_VERTEX_CACHE_SIZE 4096
 #define UNIFIED_INDEX_CACHE_SIZE 6144
 
-// 统一着色器WGSL代码
-static const char* unified_vertex_shader = 
-"struct VertexInput {\n"
-"    @location(0) position: vec2<f32>,\n"
-"    @location(1) texCoords: vec2<f32>,\n"
-"    @location(2) color: vec4<f32>,\n"
-"    @location(3) params: vec4<f32>,\n"      // [type, textureIndex, blendMode, reserved]
-"    @location(4) geometry: vec4<f32>,\n"    // 几何参数
-"    @location(5) bounds: vec4<f32>,\n"      // 包围盒
-"    @location(6) zIndex: f32,\n"
-"}\n"
-"\n"
-"struct VertexOutput {\n"
-"    @builtin(position) position: vec4<f32>,\n"
-"    @location(0) texCoords: vec2<f32>,\n"
-"    @location(1) color: vec4<f32>,\n"
-"    @location(2) params: vec4<f32>,\n"
-"    @location(3) geometry: vec4<f32>,\n"
-"    @location(4) bounds: vec4<f32>,\n"
-"    @location(5) worldPos: vec2<f32>,\n"    // 世界坐标，用于矩形圆角计算
-"}\n"
-"\n"
-"struct Uniforms {\n"
-"    screenSize: vec2<f32>,\n"
-"    time: f32,\n"
-"    _padding: f32,\n"
-"}\n"
-"\n"
-"@group(0) @binding(0) var<uniform> uniforms: Uniforms;\n"
-"\n"
-"@vertex\n"
-"fn vs_main(input: VertexInput) -> VertexOutput {\n"
-"    var output: VertexOutput;\n"
-"    \n"
-"    // 将屏幕坐标转换为NDC\n"
-"    let ndc_x = (input.position.x / uniforms.screenSize.x) * 2.0 - 1.0;\n"
-"    let ndc_y = 1.0 - (input.position.y / uniforms.screenSize.y) * 2.0;\n"
-"    \n"
-"    output.position = vec4<f32>(ndc_x, ndc_y, 0.0, 1.0);\n"
-"    output.texCoords = input.texCoords;\n"
-"    output.color = input.color;\n"
-"    output.params = input.params;\n"
-"    output.geometry = input.geometry;\n"
-"    output.bounds = input.bounds;\n"
-"    output.worldPos = input.position;\n"
-"    \n"
-"    return output;\n"
-"}\n";
 
-static const char* unified_fragment_shader =
-"@group(1) @binding(0) var mainTexture: texture_2d<f32>;\n"
-"@group(1) @binding(1) var texSampler: sampler;\n"
-"\n"
-"struct FragmentInput {\n"
-"    @location(0) texCoords: vec2<f32>,\n"
-"    @location(1) color: vec4<f32>,\n"
-"    @location(2) params: vec4<f32>,\n"
-"    @location(3) geometry: vec4<f32>,\n"
-"    @location(4) bounds: vec4<f32>,\n"
-"    @location(5) worldPos: vec2<f32>,\n"
-"}\n"
-"\n"
-"// 圆角矩形SDF函数\n"
-"fn sdf_rounded_box(p: vec2<f32>, size: vec2<f32>, radius: vec4<f32>) -> f32 {\n"
-"    // 根据象限选择圆角半径\n"
-"    var r: f32;\n"
-"    if (p.x > 0.0) {\n"
-"        if (p.y > 0.0) { r = radius.y; }  // top-right\n"
-"        else { r = radius.z; }            // bottom-right\n"
-"    } else {\n"
-"        if (p.y > 0.0) { r = radius.x; }  // top-left\n"
-"        else { r = radius.w; }            // bottom-left\n"
-"    }\n"
-"    \n"
-"    let q = abs(p) - size + r;\n"
-"    return min(max(q.x, q.y), 0.0) + length(max(q, vec2<f32>(0.0))) - r;\n"
-"}\n"
-"\n"
-"@fragment\n"
-"fn fs_main(input: FragmentInput) -> @location(0) vec4<f32> {\n"
-"    let renderType = u32(input.params.x);\n"
-"    let textureIndex = u32(input.params.y);\n"
-"    let blendMode = u32(input.params.z);\n"
-"    \n"
-"    var finalColor = input.color;\n"
-"    \n"
-"    // 根据渲染类型处理\n"
-"    switch renderType {\n"
-"        case 0u: { // 矩形\n"
-"            let center = input.bounds.xy + input.bounds.zw * 0.5;\n"
-"            let p = input.worldPos - center;\n"
-"            let halfSize = input.bounds.zw * 0.5;\n"
-"            let cornerRadius = input.geometry;\n"
-"            \n"
-"            let d = sdf_rounded_box(p, halfSize, cornerRadius);\n"
-"            let alpha = 1.0 - smoothstep(-1.0, 1.0, d);\n"
-"            \n"
-"            if (alpha < 0.001) {\n"
-"                discard;\n"
-"            }\n"
-"            \n"
-"            finalColor.a = finalColor.a * alpha;\n"
-"        }\n"
-"        case 1u: { // 文本\n"
-"            let texColor = textureSample(mainTexture, texSampler, input.texCoords);\n"
-"            finalColor.a = finalColor.a * texColor.r; // 使用红色通道作为alpha\n"
-"            \n"
-"            if (finalColor.a < 0.001) {\n"
-"                discard;\n"
-"            }\n"
-"        }\n"
-"        case 2u: { // 图片\n"
-"            let texColor = textureSample(mainTexture, texSampler, input.texCoords);\n"
-"            finalColor = finalColor * texColor;\n"
-"            \n"
-"            // 可选：应用圆角遮罩\n"
-"            if (input.geometry.x > 0.0) {\n"
-"                let center = input.bounds.xy + input.bounds.zw * 0.5;\n"
-"                let p = input.worldPos - center;\n"
-"                let halfSize = input.bounds.zw * 0.5;\n"
-"                let cornerRadius = input.geometry;\n"
-"                \n"
-"                let d = sdf_rounded_box(p, halfSize, cornerRadius);\n"
-"                let alpha = 1.0 - smoothstep(-1.0, 1.0, d);\n"
-"                finalColor.a = finalColor.a * alpha;\n"
-"            }\n"
-"            \n"
-"            if (finalColor.a < 0.001) {\n"
-"                discard;\n"
-"            }\n"
-"        }\n"
-"        case 3u: { // 边框\n"
-"            let center = input.bounds.xy + input.bounds.zw * 0.5;\n"
-"            let p = input.worldPos - center;\n"
-"            let halfSize = input.bounds.zw * 0.5;\n"
-"            let borderWidth = input.geometry.x;\n"
-"            let cornerRadius = vec4<f32>(input.geometry.y, input.geometry.z, input.geometry.w, input.geometry.y);\n"
-"            \n"
-"            let outerD = sdf_rounded_box(p, halfSize, cornerRadius);\n"
-"            let innerD = sdf_rounded_box(p, halfSize - vec2<f32>(borderWidth), cornerRadius);\n"
-"            \n"
-"            let outerAlpha = 1.0 - smoothstep(-1.0, 1.0, outerD);\n"
-"            let innerAlpha = 1.0 - smoothstep(-1.0, 1.0, innerD);\n"
-"            let borderAlpha = outerAlpha - innerAlpha;\n"
-"            \n"
-"            if (borderAlpha < 0.001) {\n"
-"                discard;\n"
-"            }\n"
-"            \n"
-"            finalColor.a = finalColor.a * borderAlpha;\n"
-"        }\n"
-"        default: {\n"
-"            discard;\n"
-"        }\n"
-"    }\n"
-"    \n"
-"    return finalColor;\n"
-"}\n";
 
 // UTF-8解码
 uint32_t unified_renderer_decode_utf8(const char **str) {
@@ -771,7 +615,7 @@ void unified_renderer_process_clay_text(UnifiedRenderer *renderer,
                  textData->fontId : renderer->defaultFontId;
     
     unified_renderer_add_text(renderer, text, textLength,
-                             bbox.x, bbox.y, color, fontId, command->zIndex);
+                             bbox.x, bbox.y, color, fontId, fontSize, command->zIndex);
 }
 
 // 处理图片渲染命令
@@ -920,8 +764,8 @@ void unified_renderer_add_rectangle(UnifiedRenderer *renderer,
 void unified_renderer_add_text(UnifiedRenderer *renderer,
                              const char *text, int textLength,
                              float x, float y, Clay_Color color,
-                             int fontId, float zIndex) {
-    Log("添加文本: '%.*s' 位置: (%.1f, %.1f) 字体ID: %d\n", textLength, text, x, y, fontId);
+                             int fontId, float fontSize, float zIndex) {
+    Log("添加文本: '%.*s' 位置: (%.1f, %.1f) 字体ID: %d fontSize: %.1f\n", textLength, text, x, y, fontId, fontSize);
     
     if (fontId < 0 || fontId >= renderer->fontCount) {
         fontId = renderer->defaultFontId;
@@ -940,6 +784,10 @@ void unified_renderer_add_text(UnifiedRenderer *renderer,
     UnifiedFont *font = &renderer->fonts[fontId];
     if (!font->loaded) return;
     
+    // 计算fontSize与字体默认fontSize的比例
+    float fontScale = fontSize / (float)font->fontSize;
+    Log("字体缩放比例: %.3f (请求fontSize: %.1f, 字体默认fontSize: %d)", fontScale, fontSize, font->fontSize);
+    
     float currentX = x;
     const char *textPtr = text;
     const char *textEnd = text + textLength;
@@ -948,17 +796,18 @@ void unified_renderer_add_text(UnifiedRenderer *renderer,
         uint32_t codepoint = unified_renderer_decode_utf8(&textPtr);
         if (codepoint == 0) break;
         
-        UnifiedGlyph *glyph = unified_renderer_get_glyph(renderer, codepoint, fontId);
+        UnifiedGlyph *glyph = unified_renderer_get_glyph(renderer, codepoint, fontId, fontSize);
         if (!glyph || !glyph->valid) {
             currentX += 8.0f; // 跳过无效字符
             continue;
         }
         
-        // 计算字符位置
+        // 计算字符位置 - 字形已按正确尺寸生成，无需额外缩放
         float glyphX = currentX + glyph->offsetX;
         // 正确计算基线位置：文本框顶部 + 字体上升高度 + 字形相对基线的偏移
         UnifiedFont *currentFont = &renderer->fonts[fontId];
-        float baselineY = y + currentFont->ascent * currentFont->scale;
+        float targetScale = stbtt_ScaleForPixelHeight((stbtt_fontinfo*)currentFont->stbFont, fontSize);
+        float baselineY = y + currentFont->ascent * targetScale;
         float glyphY = baselineY + glyph->offsetY;
         
         // 添加字符四边形
@@ -972,44 +821,48 @@ void unified_renderer_add_text(UnifiedRenderer *renderer,
             
             int startVertex = renderer->vertexCount;
             
+            // 字形已按正确尺寸生成，直接使用
+            float glyphWidth = glyph->width;
+            float glyphHeight = glyph->height;
+            
             // 创建文本四边形的4个顶点
             renderer->vertices[startVertex + 0] = (UnifiedVertex){
                 .position = {glyphX, glyphY},
                 .texCoords = {glyph->uvX, glyph->uvY},
                 .color = {r, g, b, a},
                 .params = {1.0f, (float)renderer->fontAtlasTextureIndex, 0.0f, 0.0f}, // type=text
-                .geometry = {0, 0, 0, 0},
-                .bounds = {glyphX, glyphY, glyph->width, glyph->height},
+                .geometry = {fontSize, 0, 0, 0}, // 将fontSize存储在geometry[0]中
+                .bounds = {glyphX, glyphY, glyphWidth, glyphHeight},
                 .zIndex = zIndex
             };
             
             renderer->vertices[startVertex + 1] = (UnifiedVertex){
-                .position = {glyphX + glyph->width, glyphY},
+                .position = {glyphX + glyphWidth, glyphY},
                 .texCoords = {glyph->uvX + glyph->uvWidth, glyph->uvY},
                 .color = {r, g, b, a},
                 .params = {1.0f, (float)renderer->fontAtlasTextureIndex, 0.0f, 0.0f},
-                .geometry = {0, 0, 0, 0},
-                .bounds = {glyphX, glyphY, glyph->width, glyph->height},
+                .geometry = {fontSize, 0, 0, 0},
+                .bounds = {glyphX, glyphY, glyphWidth, glyphHeight},
                 .zIndex = zIndex
             };
             
             renderer->vertices[startVertex + 2] = (UnifiedVertex){
-                .position = {glyphX + glyph->width, glyphY + glyph->height},
+                .position = {glyphX + glyphWidth, glyphY + glyphHeight},
                 .texCoords = {glyph->uvX + glyph->uvWidth, glyph->uvY + glyph->uvHeight},
                 .color = {r, g, b, a},
                 .params = {1.0f, (float)renderer->fontAtlasTextureIndex, 0.0f, 0.0f},
-                .geometry = {0, 0, 0, 0},
-                .bounds = {glyphX, glyphY, glyph->width, glyph->height},
+                .geometry = {fontSize, 0, 0, 0},
+                .bounds = {glyphX, glyphY, glyphWidth, glyphHeight},
                 .zIndex = zIndex
             };
             
             renderer->vertices[startVertex + 3] = (UnifiedVertex){
-                .position = {glyphX, glyphY + glyph->height},
+                .position = {glyphX, glyphY + glyphHeight},
                 .texCoords = {glyph->uvX, glyph->uvY + glyph->uvHeight},
                 .color = {r, g, b, a},
                 .params = {1.0f, (float)renderer->fontAtlasTextureIndex, 0.0f, 0.0f},
-                .geometry = {0, 0, 0, 0},
-                .bounds = {glyphX, glyphY, glyph->width, glyph->height},
+                .geometry = {fontSize, 0, 0, 0},
+                .bounds = {glyphX, glyphY, glyphWidth, glyphHeight},
                 .zIndex = zIndex
             };
             
@@ -1238,11 +1091,13 @@ bool unified_renderer_set_default_font(UnifiedRenderer *renderer, int fontId) {
 
 // 获取字形（支持字体回退）
 UnifiedGlyph* unified_renderer_get_glyph(UnifiedRenderer *renderer,
-                                        uint32_t codepoint, int fontId) {
-    // 在缓存中查找
+                                        uint32_t codepoint, int fontId, float fontSize) {
+    // 在缓存中查找 - 现在需要匹配codepoint、fontId和fontSize
     for (int i = 0; i < UNIFIED_GLYPH_CACHE_SIZE; i++) {
         if (renderer->glyphCache[i].codepoint == codepoint && 
-            renderer->glyphCache[i].fontId == fontId && renderer->glyphCache[i].valid) {
+            renderer->glyphCache[i].fontId == fontId && 
+            renderer->glyphCache[i].valid &&
+            fabsf(renderer->glyphCache[i].fontSize - fontSize) < 0.1f) { // 允许小的浮点误差
             renderer->glyphCacheHits++;
             return &renderer->glyphCache[i];
         }
@@ -1250,11 +1105,13 @@ UnifiedGlyph* unified_renderer_get_glyph(UnifiedRenderer *renderer,
     
     // 缓存未命中，尝试从指定字体生成字形
     renderer->glyphCacheMisses++;
-    if (unified_renderer_add_glyph_to_atlas(renderer, codepoint, fontId)) {
+    if (unified_renderer_add_glyph_to_atlas(renderer, codepoint, fontId, fontSize)) {
         // 再次查找
         for (int i = 0; i < UNIFIED_GLYPH_CACHE_SIZE; i++) {
             if (renderer->glyphCache[i].codepoint == codepoint && 
-                renderer->glyphCache[i].fontId == fontId && renderer->glyphCache[i].valid) {
+                renderer->glyphCache[i].fontId == fontId && 
+                renderer->glyphCache[i].valid &&
+                fabsf(renderer->glyphCache[i].fontSize - fontSize) < 0.1f) {
                 return &renderer->glyphCache[i];
             }
         }
@@ -1274,7 +1131,7 @@ UnifiedGlyph* unified_renderer_get_glyph(UnifiedRenderer *renderer,
         }
         
         // 尝试从回退字体生成字形
-        if (unified_renderer_add_glyph_to_atlas(renderer, codepoint, fallbackFontId)) {
+        if (unified_renderer_add_glyph_to_atlas(renderer, codepoint, fallbackFontId, fontSize)) {
             for (int i = 0; i < UNIFIED_GLYPH_CACHE_SIZE; i++) {
                 if (renderer->glyphCache[i].codepoint == codepoint && 
                     renderer->glyphCache[i].fontId == fallbackFontId && renderer->glyphCache[i].valid) {
@@ -1291,13 +1148,16 @@ UnifiedGlyph* unified_renderer_get_glyph(UnifiedRenderer *renderer,
 
 // 添加字形到atlas
 bool unified_renderer_add_glyph_to_atlas(UnifiedRenderer *renderer,
-                                        uint32_t codepoint, int fontId) {
+                                        uint32_t codepoint, int fontId, float fontSize) {
     if (fontId < 0 || fontId >= renderer->fontCount) return false;
     
     UnifiedFont *font = &renderer->fonts[fontId];
     if (!font->loaded) return false;
     
     stbtt_fontinfo *fontInfo = (stbtt_fontinfo*)font->stbFont;
+    
+    // 根据目标fontSize计算scale，而不是使用字体默认的scale
+    float targetScale = stbtt_ScaleForPixelHeight(fontInfo, fontSize);
     
     // 首先检查字体是否包含该字符
     int glyphIndex = stbtt_FindGlyphIndex(fontInfo, codepoint);
@@ -1311,7 +1171,7 @@ bool unified_renderer_add_glyph_to_atlas(UnifiedRenderer *renderer,
     stbtt_GetCodepointHMetrics(fontInfo, codepoint, &advance, &lsb);
     
     int x0, y0, x1, y1;
-    stbtt_GetCodepointBitmapBox(fontInfo, codepoint, font->scale, font->scale, &x0, &y0, &x1, &y1);
+    stbtt_GetCodepointBitmapBox(fontInfo, codepoint, targetScale, targetScale, &x0, &y0, &x1, &y1);
     
     int width = x1 - x0;
     int height = y1 - y0;
@@ -1346,7 +1206,8 @@ bool unified_renderer_add_glyph_to_atlas(UnifiedRenderer *renderer,
             glyph->height = 0;
             glyph->offsetX = 0;
             glyph->offsetY = 0;
-            glyph->advance = advance * font->scale;
+            glyph->fontSize = fontSize;
+            glyph->advance = advance * targetScale;
             glyph->valid = true;
             
             return true;
@@ -1369,7 +1230,7 @@ bool unified_renderer_add_glyph_to_atlas(UnifiedRenderer *renderer,
     // 生成字形位图
     unsigned char *bitmap = malloc(width * height);
     stbtt_MakeCodepointBitmap(fontInfo, bitmap, width, height, width, 
-                             font->scale, font->scale, codepoint);
+                             targetScale, targetScale, codepoint);
     
     // 复制到atlas
     for (int y = 0; y < height; y++) {
@@ -1410,6 +1271,7 @@ bool unified_renderer_add_glyph_to_atlas(UnifiedRenderer *renderer,
     UnifiedGlyph *glyph = &renderer->glyphCache[cacheIndex];
     glyph->codepoint = codepoint;
     glyph->fontId = fontId;
+    glyph->fontSize = fontSize;
     glyph->uvX = uvX;
     glyph->uvY = uvY;
     glyph->uvWidth = uvWidth;
@@ -1418,7 +1280,7 @@ bool unified_renderer_add_glyph_to_atlas(UnifiedRenderer *renderer,
     glyph->height = height;
     glyph->offsetX = x0;
     glyph->offsetY = y0;  // 保持相对于基线的原始偏移
-    glyph->advance = advance * font->scale;
+    glyph->advance = advance * targetScale;
     glyph->valid = true;
     
     // 更新atlas位置
@@ -1534,7 +1396,7 @@ void unified_renderer_sort_batches_by_z(UnifiedRenderer *renderer) {
 
 // 测量文本宽度
 float unified_renderer_measure_text(UnifiedRenderer *renderer, const char *text, 
-                                   int fontId, int maxLength) {
+                                   int fontId, float fontSize, int maxLength) {
     if (fontId < 0 || fontId >= renderer->fontCount) {
         fontId = renderer->defaultFontId;
     }
@@ -1546,6 +1408,9 @@ float unified_renderer_measure_text(UnifiedRenderer *renderer, const char *text,
     UnifiedFont *font = &renderer->fonts[fontId];
     if (!font->loaded) return 0.0f;
     
+    // 计算fontSize比例
+    float fontScale = fontSize / (float)font->fontSize;
+    
     float width = 0.0f;
     const char *textPtr = text;
     const char *textEnd = text + maxLength;
@@ -1554,11 +1419,11 @@ float unified_renderer_measure_text(UnifiedRenderer *renderer, const char *text,
         uint32_t codepoint = unified_renderer_decode_utf8(&textPtr);
         if (codepoint == 0) break;
         
-        UnifiedGlyph *glyph = unified_renderer_get_glyph(renderer, codepoint, fontId);
+        UnifiedGlyph *glyph = unified_renderer_get_glyph(renderer, codepoint, fontId, fontSize);
         if (glyph && glyph->valid) {
             width += glyph->advance;
         } else {
-            width += 8.0f; // 默认字符宽度
+            width += 8.0f * fontScale; // 默认字符宽度
         }
     }
     

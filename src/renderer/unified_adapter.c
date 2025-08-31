@@ -216,7 +216,7 @@ Clay_Dimensions unified_adapter_measure_clay_text(Clay_StringSlice text,
     }
     
     float width = unified_renderer_measure_text(adapter->unifiedRenderer, text.chars, 
-                                              config->fontId, text.length);
+                                              config->fontId, config->fontSize, text.length);
     float height = unified_adapter_get_line_height(adapter, config->fontId);
     
     return (Clay_Dimensions){.width = width, .height = height};

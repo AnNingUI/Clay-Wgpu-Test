@@ -72,6 +72,7 @@ typedef struct {
 typedef struct {
     uint32_t codepoint;
     int fontId;
+    float fontSize;                     // 字形对应的fontSize
     float uvX, uvY, uvWidth, uvHeight;  // 在atlas中的UV坐标
     float width, height;                // 字形尺寸
     float offsetX, offsetY;             // 字形偏移
@@ -186,7 +187,7 @@ int unified_renderer_load_font(UnifiedRenderer *renderer, const char *fontPath, 
 int unified_renderer_load_font_with_priority(UnifiedRenderer *renderer, const char *fontPath, int fontSize, int priority);
 bool unified_renderer_set_default_font(UnifiedRenderer *renderer, int fontId);
 float unified_renderer_measure_text(UnifiedRenderer *renderer, const char *text, 
-                                   int fontId, int maxLength);
+                                   int fontId, float fontSize, int maxLength);
 
 // ===== 渲染API - 统一接口 =====
 
@@ -200,7 +201,7 @@ void unified_renderer_add_rectangle(UnifiedRenderer *renderer,
 void unified_renderer_add_text(UnifiedRenderer *renderer,
                              const char *text, int textLength,
                              float x, float y, Clay_Color color,
-                             int fontId, float zIndex);
+                             int fontId, float fontSize, float zIndex);
 
 // 渲染图片
 void unified_renderer_add_image(UnifiedRenderer *renderer,
@@ -235,9 +236,9 @@ void unified_renderer_process_clay_border(UnifiedRenderer *renderer,
 
 // 字形管理
 UnifiedGlyph* unified_renderer_get_glyph(UnifiedRenderer *renderer,
-                                        uint32_t codepoint, int fontId);
+                                        uint32_t codepoint, int fontId, float fontSize);
 bool unified_renderer_add_glyph_to_atlas(UnifiedRenderer *renderer,
-                                        uint32_t codepoint, int fontId);
+                                        uint32_t codepoint, int fontId, float fontSize);
 void unified_renderer_flush_font_atlas(UnifiedRenderer *renderer);
 
 // 批次管理

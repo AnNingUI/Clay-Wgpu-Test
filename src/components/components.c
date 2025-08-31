@@ -116,7 +116,7 @@ void HeaderComponent(Clay_String title) {
         .backgroundColor = PRIMARY_COLOR}) {
 
     // 菜单按钮
-    ButtonData menuButton = {.text = CLAY_STRING("☰"),
+    ButtonData menuButton = {.text = CLAY_STRING("❤️"),
                              .fontSize = 24,
                              .backgroundColor = ACCENT_COLOR,
                              .buttonId = CLAY_ID("MenuButton"),
@@ -125,7 +125,7 @@ void HeaderComponent(Clay_String title) {
 
     // 标题文本
     CLAY_TEXT(title, CLAY_TEXT_CONFIG({.fontId = 0,
-                                       .fontSize = 28,
+                                       .fontSize = 18,
                                        .textColor = {255, 255, 255, 255}}));
   }
   CLAY({
